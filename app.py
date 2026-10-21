@@ -90,6 +90,21 @@ hr{border-color:rgba(130,159,191,.12)!important;margin:1.15rem 0!important}
 [class*="st-key-workspace_top_"] button[kind="primary"]{background:linear-gradient(145deg,#153d60,#102b45)!important;border-color:rgba(97,194,246,.7)!important;box-shadow:inset 0 0 0 1px rgba(78,170,222,.12)!important}
 [class*="st-key-workspace_top_"] button:hover{border-color:#68c4f1!important}
 @media(max-width:768px){[class*="st-key-workspace_top_"] button{min-height:52px!important;height:52px!important;padding:5px 2px!important;font-size:10px!important;border-radius:9px!important}.nexus-workspace-label{margin-bottom:5px}}
+
+/* Compact mobile-first workspace navigation */
+.nexus-workspace-label{margin:.45rem 0 .3rem!important;font-size:10px!important;letter-spacing:.16em!important}
+[data-testid="stMain"] div.stButton button[kind="secondary"],[data-testid="stMain"] div.stButton button[kind="primary"]{min-height:42px}
+.nexus-hero{padding:18px 22px!important;margin-top:8px!important}
+.nexus-hero h1{font-size:clamp(21px,2.3vw,29px)!important;margin:0 0 5px!important}
+.nexus-hero p{font-size:13px!important;line-height:1.5!important;margin:0!important}
+@media(max-width:768px){
+[data-testid="stMain"] div.stButton button{min-height:44px!important;padding:6px 5px!important;font-size:13px!important}
+.nexus-hero{padding:14px 16px!important;margin-top:2px!important;border-radius:12px!important}
+.nexus-hero h1{font-size:20px!important}
+.nexus-hero p{font-size:12px!important}
+.nexus-kicker{font-size:10px!important;margin-top:5px!important}
+}
+
 </style>
 """,unsafe_allow_html=True)
 
@@ -322,9 +337,9 @@ def switch_workspace(target):
 workspace_names = ["📊 行情总览", "🔬 高级研究", "📰 市场新闻", "🏦 宏观日历"]
 # Compact four-tile navigation; selection remains synchronized with the sidebar.
 st.markdown('<div class="nexus-workspace-label">WORKSPACE <span>· ' + research_view + '</span></div>', unsafe_allow_html=True)
-workspace_cols = st.columns(4, gap="small")
-for workspace_col, workspace_name in zip(workspace_cols, workspace_names):
-    with workspace_col:
+workspace_cols = st.columns(2, gap="small")
+for index, workspace_name in enumerate(workspace_names):
+    with workspace_cols[index % 2]:
         st.button(
             workspace_name,
             key="workspace_top_" + workspace_name,
