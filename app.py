@@ -80,14 +80,14 @@ def feedback_mail_settings():
             return str(st.secrets.get(key, os.environ.get(key, ""))).strip()
         except Exception:
             return os.environ.get(key, "").strip()
-    sender=setting("QQ_SMTP_EMAIL")
-    auth_code=setting("QQ_SMTP_AUTH_CODE")
+    sender=setting("GMAIL_SMTP_EMAIL")
+    app_password=setting("GMAIL_APP_PASSWORD")
     recipient=setting("FEEDBACK_RECEIVER_EMAIL") or sender
-    return sender,auth_code,recipient
+    return sender,app_password,recipient
 
 def send_feedback_email(member_email,period,rating,comment,created_at):
-    sender,auth_code,recipient=feedback_mail_settings()
-    if not (sender and auth_code and recipient):
+    sender,app_password,recipient=feedback_mail_settings()
+    if not (sender and app_password and recipient):
         return False,"not_configured"
     msg=EmailMessage()
     msg["Subject"]="[NEXUS] 新的会员反馈"
@@ -103,8 +103,8 @@ def send_feedback_email(member_email,period,rating,comment,created_at):
     )
     try:
         context=ssl.create_default_context()
-        with smtplib.SMTP_SSL("smtp.qq.com",465,timeout=12,context=context) as smtp:
-            smtp.login(sender,auth_code)
+        with smtplib.SMTP_SSL("smtp.gmail.com",465,timeout=12,context=context) as smtp:
+            smtp.login(sender,app_password)
             smtp.send_message(msg)
         return True,"sent"
     except Exception:
