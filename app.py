@@ -11,6 +11,9 @@ import secrets
 import os
 import re
 import time
+import smtplib
+import ssl
+from email.message import EmailMessage
 from pathlib import Path
 from datetime import datetime, timezone
 
@@ -70,6 +73,42 @@ def auth_connection():
     )""")
     conn.commit()
     return conn
+
+def feedback_mail_settings():
+    def setting(key):
+        try:
+            return str(st.secrets.get(key, os.environ.get(key, ""))).strip()
+        except Exception:
+            return os.environ.get(key, "").strip()
+    sender=setting("QQ_SMTP_EMAIL")
+    auth_code=setting("QQ_SMTP_AUTH_CODE")
+    recipient=setting("FEEDBACK_RECEIVER_EMAIL") or sender
+    return sender,auth_code,recipient
+
+def send_feedback_email(member_email,period,rating,comment,created_at):
+    sender,auth_code,recipient=feedback_mail_settings()
+    if not (sender and auth_code and recipient):
+        return False,"not_configured"
+    msg=EmailMessage()
+    msg["Subject"]="[NEXUS] 新的会员反馈"
+    msg["From"]=sender
+    msg["To"]=recipient
+    msg.set_content(
+        "NEXUS 内测会员反馈\\n\\n"
+        f"会员邮箱：{member_email}\\n"
+        f"预测周期：{period}\\n"
+        f"评价：{rating}\\n"
+        f"提交时间（UTC）：{created_at}\\n\\n"
+        f"反馈内容：\\n{comment}\\n"
+    )
+    try:
+        context=ssl.create_default_context()
+        with smtplib.SMTP_SSL("smtp.qq.com",465,timeout=12,context=context) as smtp:
+            smtp.login(sender,auth_code)
+            smtp.send_message(msg)
+        return True,"sent"
+    except Exception:
+        return False,"failed"
 
 def normalize_email(value):
     return value.strip().lower()
@@ -947,11 +986,19 @@ with st.form("nexus_member_feedback",clear_on_submit=True):
             st.warning("请至少填写5个字的反馈内容。")
         else:
             try:
+                feedback_time=datetime.now(timezone.utc).isoformat()
                 with auth_connection() as feedback_db:
                     feedback_db.execute("INSERT INTO member_feedback(email,period,rating,comment,created_at) VALUES(?,?,?,?,?)",(
                         st.session_state["member_email"],feedback_period,feedback_rating,feedback_comment.strip(),
-                        datetime.now(timezone.utc).isoformat()))
-                st.success("反馈已提交，感谢参与内测！")
+                        feedback_time))
+                mail_ok,mail_status=send_feedback_email(
+                    st.session_state["member_email"],feedback_period,feedback_rating,feedback_comment.strip(),feedback_time)
+                if mail_ok:
+                    st.success("反馈已记录，并已发送邮件通知。感谢参与内测！")
+                elif mail_status=="not_configured":
+                    st.success("反馈已记录。邮件通知尚未配置，暂时不会发送。")
+                else:
+                    st.warning("反馈已记录，但邮件发送失败；请管理员检查邮件配置。")
             except Exception:
                 st.error("反馈保存失败，请稍后再试。")
 st.caption("反馈暂存于测试数据库，服务器重建时可能丢失；正式开放前需迁移到持久化云数据库。")
