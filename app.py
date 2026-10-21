@@ -263,6 +263,32 @@ with tab1:
                 else: st.info("当前历史K线范围与候选事件无可计算的交集。")
             except Exception as exc: st.warning(f"官方事件历史匹配失败：{exc}")
         st.caption("核对入口：美国劳工统计局 CPI、就业报告发布日程及美联储 FOMC 日历。当前日期列表尚未逐条完成来源核验，尤其非农可能出现改期；不包含预期差和政策结果。")
+        st.subheader("🧪 样本外历史区间回测（独立于宏观事件）")
+        st.caption("使用一年小时线的前70%训练、后30%测试；每个预测点只使用此前已收盘数据，计算历史75分位绝对涨跌幅形成对称区间。此测试不是当前ATR综合区间的准确率。")
+        if st.button("▶️ 运行样本外区间回测",key="run_oos_backtest"):
+            try:
+                history = historical_hourly(pair)
+                prices = history.close.astype(float).reset_index(drop=True)
+                cutoff = int(len(prices)*0.7)
+                records=[]
+                for horizon in (1,4,24):
+                    hits=[]
+                    widths=[]
+                    for idx in range(max(cutoff,720+horizon),len(prices)-horizon):
+                        past = (prices.shift(-horizon)/prices-1).abs().iloc[idx-720-horizon:idx-horizon].dropna()
+                        if len(past)<600: continue
+                        width = float(past.quantile(0.75))
+                        realized = abs(float(prices.iloc[idx+horizon]/prices.iloc[idx]-1))
+                        hits.append(realized<=width)
+                        widths.append(width*100)
+                    if hits:
+                        records.append({"周期":f"{horizon}小时","测试预测点":len(hits),"区间命中率%":round(np.mean(hits)*100,2),"平均半宽%":round(np.mean(widths),2),"训练结束":str(history.ts.iloc[cutoff])})
+                if records:
+                    st.dataframe(pd.DataFrame(records),use_container_width=True,hide_index=True)
+                    st.caption("测试点的未来窗口互相重叠，命中率不是独立事件概率；75%是训练数据的历史分位数，并非保证达到的准确率。")
+                else: st.warning("可用历史不足，无法完成样本外回测。")
+            except Exception as exc: st.warning(f"样本外回测暂不可用：{exc}")
+        st.caption("官方时间核对入口：BLS发布日程 https://www.bls.gov/schedule/news_release/ ｜ FOMC https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm 。候选事件发布时间尚未逐条验证，不参与本项回测。")
         st.subheader("📉 事件发布后的历史K线反应")
         st.caption("按新闻源标注的发布时间匹配OKX已收盘1小时K线；仅描述价格变化，不能证明事件导致涨跌。")
         try:
