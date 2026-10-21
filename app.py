@@ -319,6 +319,28 @@ with tab1:
                 else: st.info("数据不足，无法进行同点对照。")
                 st.caption("未来窗口互相重叠，结果不能作为独立胜率；两模型均未计入手续费、交易方向及新闻影响。")
             except Exception as exc: st.warning(f"同点对照暂不可用：{exc}")
+        st.subheader("📊 1小时 / 4小时：上涨、下跌、震荡分类回测")
+        st.caption("行情分类仅用预测点之前24小时的已收盘价格：涨幅超过1%为上涨，跌幅超过1%为下跌，其余为震荡；阈值是研究假设，并非最佳参数。")
+        if st.button("▶️ 运行分类样本外回测",key="run_regime_oos"):
+            try:
+                rh=historical_hourly(pair)
+                rp=rh.close.astype(float).reset_index(drop=True)
+                split=int(len(rp)*0.7)
+                results=[]
+                for hh in (1,4):
+                    realized=(rp.shift(-hh)/rp-1).abs()
+                    widths=realized.shift(hh).rolling(720,min_periods=600).quantile(0.75)
+                    prior24=rp/rp.shift(24)-1
+                    regimes=np.where(prior24>0.01,"上涨",np.where(prior24< -0.01,"下跌","震荡"))
+                    test=pd.DataFrame({"width":widths,"actual":realized,"regime":regimes}).iloc[split:len(rp)-hh].dropna()
+                    for rg in ("上涨","下跌","震荡"):
+                        sub=test[test.regime==rg]
+                        if len(sub)==0:continue
+                        results.append({"周期":f"{hh}小时","行情":rg,"预测点":len(sub),"区间命中率%":round(float((sub.actual<=sub.width).mean()*100),2),"平均半宽%":round(float(sub.width.mean()*100),3)})
+                if results:st.dataframe(pd.DataFrame(results),use_container_width=True,hide_index=True)
+                else:st.warning("可用样本不足。")
+                st.caption("每个预测点只使用当时已知历史数据计算区间；未来1小时/4小时结果用于事后核验。预测窗口存在重叠，分类命中率不是独立交易胜率。")
+            except Exception as exc:st.warning(f"分类回测暂不可用：{exc}")
         st.caption("官方时间核对入口：BLS发布日程 https://www.bls.gov/schedule/news_release/ ｜ FOMC https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm 。候选事件发布时间尚未逐条验证，不参与本项回测。")
         st.subheader("📉 事件发布后的历史K线反应")
         st.caption("按新闻源标注的发布时间匹配OKX已收盘1小时K线；仅描述价格变化，不能证明事件导致涨跌。")
