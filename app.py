@@ -304,6 +304,26 @@ with st.sidebar:
         st.session_state.pop("member_email", None)
         st.rerun()
 
+# Visible workspace navigation: works even if the mobile sidebar overlay stays open.
+# Both sidebar and main navigation share the same session-state key.
+def switch_workspace(target):
+    st.session_state["research_navigation"] = target
+    st.session_state["nexus_close_sidebar_requested"] = True
+
+workspace_names = ["📊 行情总览", "🔬 高级研究", "📰 市场新闻", "🏦 宏观日历"]
+st.caption("当前工作区：" + st.session_state.get("research_navigation", workspace_names[0]))
+workspace_cols = st.columns(4, gap="small")
+for workspace_col, workspace_name in zip(workspace_cols, workspace_names):
+    with workspace_col:
+        st.button(
+            workspace_name,
+            key="workspace_top_" + workspace_name,
+            use_container_width=True,
+            type="primary" if research_view == workspace_name else "secondary",
+            on_click=switch_workspace,
+            args=(workspace_name,),
+        )
+
 st.markdown('<div class="nexus-ticker"><span>📢 NEXUS 平台内测期间免费开放　｜　预测区间仅供研究参考，不保证准确率或交易收益　｜　欢迎在页面底部反馈预测体验与改进建议　｜　感谢参与内测</span></div>',unsafe_allow_html=True)
 st.markdown('<div class="nexus-kicker">NEXUS / MARKET INTELLIGENCE</div>',unsafe_allow_html=True)
 st.markdown('<div class="nexus-hero"><h1>NEXUS / Market Intelligence</h1><p>BTC · ETH 数字资产研究终端　/　实时行情　/　K线结构　/　波动区间　/　风险模拟</p></div>',unsafe_allow_html=True)
@@ -617,6 +637,7 @@ if research_view == "📊 行情总览":
         st.info("可稍后刷新；某些网络或云服务器可能暂时无法访问 OKX 公共接口。")
 
 elif research_view == "📰 市场新闻":
+    st.markdown("### 📰 市场新闻")
     st.caption("CoinDesk RSS；新闻可能延迟，不自动作为交易信号。")
     try:
         entries=feed("https://www.coindesk.com/arc/outboundfeeds/rss/")
@@ -625,6 +646,7 @@ elif research_view == "📰 市场新闻":
     except Exception as e: st.warning(f"新闻暂不可用：{e}")
 
 elif research_view == "🏦 宏观日历":
+    st.markdown("### 🏦 宏观日历")
     st.caption("美联储官方货币政策公告；CPI、非农结果以美国劳工统计局为准。")
     try:
         entries=feed("https://www.federalreserve.gov/feeds/press_monetary.xml")
