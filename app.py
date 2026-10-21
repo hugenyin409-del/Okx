@@ -378,6 +378,46 @@ with tab1:
                     st.caption("仅报告区间覆盖率，不是方向准确率或交易胜率；重叠预测窗口相关，须独立检验后才能决定是否采用。")
                 except Exception as exc:
                     st.warning(f"动态区间回测暂不可用：{exc}")
+            st.subheader("⚖️ 同宽度覆盖率对照：上涨趋势")
+            st.caption("对每个预测点，将实验版B的非对称上下沿等比例缩放至原实验版的总宽度；这样两者宽度完全一致，仅比较中心偏移是否改善覆盖。训练分位仅使用预测时已知数据。")
+            if st.button("▶️ 运行同宽度覆盖率测试",key="run_equal_width_oos"):
+                try:
+                    hist = historical_hourly(pair)
+                    close = hist.close.astype(float).reset_index(drop=True)
+                    split = int(len(close)*.7)
+                    trend = (close/close.shift(24)-1)>0.01
+                    equal_rows=[]
+                    for hh in (1,4):
+                        future=close.shift(-hh)/close-1
+                        known=future.shift(hh)
+                        regime_past=trend.shift(hh).fillna(False).astype(bool)
+                        selected=known.where(regime_past)
+                        lo_all=known.rolling(720,min_periods=600).quantile(.125)
+                        hi_all=known.rolling(720,min_periods=600).quantile(.875)
+                        lo_cond=selected.rolling(720,min_periods=120).quantile(.125)
+                        hi_cond=selected.rolling(720,min_periods=120).quantile(.875)
+                        lo=lo_cond.where(trend,lo_all).fillna(lo_all)
+                        hi=hi_cond.where(trend,hi_all).fillna(hi_all)
+                        width=known.abs().rolling(720,min_periods=600).quantile(.75)
+                        frame=pd.DataFrame({"actual":future,"lo":lo,"hi":hi,"half":width,"trend":trend}).iloc[split:len(close)-hh].dropna()
+                        frame=frame[frame.trend & ((frame.hi-frame.lo)>0) & (frame.half>0)]
+                        if frame.empty:continue
+                        # Match each prediction's full width to the symmetric baseline, preserving B's center.
+                        center=(frame.hi+frame.lo)/2
+                        low_equal=center-frame.half
+                        high_equal=center+frame.half
+                        base_hit=frame.actual.abs()<=frame.half
+                        new_hit=(frame.actual>=low_equal)&(frame.actual<=high_equal)
+                        equal_rows.extend([
+                            {"周期":f"{hh}小时","模型":"原实验版：对称区间","上涨样本":len(frame),"覆盖率%":round(base_hit.mean()*100,2),"平均总宽%":round((2*frame.half).mean()*100,3)},
+                            {"周期":f"{hh}小时","模型":"实验版B：同宽度平移区间","上涨样本":len(frame),"覆盖率%":round(new_hit.mean()*100,2),"平均总宽%":round((2*frame.half).mean()*100,3)}
+                        ])
+                    if equal_rows:
+                        st.dataframe(pd.DataFrame(equal_rows),use_container_width=True,hide_index=True)
+                        st.caption("同宽度意味着只检验非对称模型的区间中心是否更合理；不代表未来盈利能力。预测窗口重叠，结果仍需独立时段验证。")
+                    else:st.warning("上涨趋势有效测试样本不足。")
+                except Exception as exc:
+                    st.warning(f"同宽度测试暂不可用：{exc}")
             st.subheader("📉 事件发布后的历史K线反应")
             st.caption("按新闻源标注的发布时间匹配OKX已收盘1小时K线；仅描述价格变化，不能证明事件导致涨跌。")
             try:
