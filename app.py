@@ -226,7 +226,7 @@ with tab1:
         st.info("待接入：CPI公布时间、非农公布时间、FOMC决议时间及各自历史实际值。没有经过官方核对的事件，不计入宏观事件回测。")
         st.caption("历史事件数据需与BTC/ETH价格历史重叠，才能计算事件后1小时、4小时和24小时波动；暂不据此调整参考区间。")
         st.subheader("🗓️ 官方宏观事件与历史小时K线匹配（首批）")
-        st.caption("以下为已核对的2026年美国官方日程；公布时间按纽约时区处理。回报采用公布前最后一根已收盘小时线与目标时间之后首根已收盘小时线，实际测量窗口最多偏离约一小时。")
+        st.caption("以下为待逐条复核的2026年美国宏观事件日程；公布时间按纽约时区处理。回报采用公布前最后一根已收盘小时线与目标时间之后首根已收盘小时线，实际测量窗口最多偏离约一小时。")
         if st.button("📊 匹配2026年CPI、非农与FOMC事件",key="match_official_macro"):
             try:
                 history = historical_hourly(pair)
@@ -249,11 +249,20 @@ with tab1:
                             record[f"{hours}小时%"]=round((float(prices[after])/float(prices[before])-1)*100,3) if after<len(prices) else None
                         if any(record[f"{hours}小时%"] is not None for hours in (1,4,24)): results.append(record)
                 if results:
-                    st.dataframe(pd.DataFrame(results),use_container_width=True,hide_index=True)
-                    st.caption(f"匹配到 {len(results)} 条官方事件；仅计算事件窗口价格变化，不代表事件造成变化，也不代表方向预测。")
-                else: st.info("当前历史K线范围与已核对事件无可计算的交集。")
+                    result_df = pd.DataFrame(results)
+                    st.dataframe(result_df,use_container_width=True,hide_index=True)
+                    st.subheader("📊 宏观事件分类波动统计（探索性）")
+                    summary=[]
+                    for category, group in result_df.groupby("事件"):
+                        for hours in (1,4,24):
+                            vals=pd.to_numeric(group[f"{hours}小时%"],errors="coerce").dropna()
+                            summary.append({"事件类型":category,"观察窗口":f"{hours}小时","有效样本":len(vals),"平均涨跌%":round(float(vals.mean()),3) if len(vals) else None,"绝对波动中位数%":round(float(vals.abs().median()),3) if len(vals) else None,"绝对波动75分位%":round(float(vals.abs().quantile(0.75)),3) if len(vals) else None})
+                    st.dataframe(pd.DataFrame(summary),use_container_width=True,hide_index=True)
+                    st.warning("各类事件样本偏少；日期与实际公布时刻仍需逐条复核。当前统计不用于调整交易信号、价格区间或仓位。")
+                    st.caption(f"匹配到 {len(results)} 条候选宏观事件；仅计算事件窗口价格变化，不代表事件造成变化，也不代表方向预测。")
+                else: st.info("当前历史K线范围与候选事件无可计算的交集。")
             except Exception as exc: st.warning(f"官方事件历史匹配失败：{exc}")
-        st.caption("来源：美国劳工统计局2026 CPI与就业报告发布日程、美国联储FOMC会议日历；首批仅覆盖2026年1月至10月已公布事件，不包含预期差和政策结果。")
+        st.caption("核对入口：美国劳工统计局 CPI、就业报告发布日程及美联储 FOMC 日历。当前日期列表尚未逐条完成来源核验，尤其非农可能出现改期；不包含预期差和政策结果。")
         st.subheader("📉 事件发布后的历史K线反应")
         st.caption("按新闻源标注的发布时间匹配OKX已收盘1小时K线；仅描述价格变化，不能证明事件导致涨跌。")
         try:
