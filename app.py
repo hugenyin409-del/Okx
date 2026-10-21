@@ -418,6 +418,40 @@ with tab1:
                     else:st.warning("上涨趋势有效测试样本不足。")
                 except Exception as exc:
                     st.warning(f"同宽度测试暂不可用：{exc}")
+            st.subheader("🧭 前瞻验证：冻结模型，等待新行情")
+            st.caption("此前历史数据已经被反复查看和调参，不能再称为全新独立测试。此处冻结当前两套算法，只评价2026-10-22 00:00（北京时间）之后新出现的完整小时K线。不会修改交易参考。")
+            if st.button("▶️ 检查前瞻验证进度",key="prospective_holdout"):
+                try:
+                    fresh=historical_hourly(pair)
+                    prices=fresh.close.astype(float).reset_index(drop=True)
+                    times=fresh.ts.reset_index(drop=True)
+                    cutoff=pd.Timestamp("2026-10-22 00:00:00",tz="Asia/Shanghai")
+                    trend=(prices/prices.shift(24)-1)>0.01
+                    records=[]
+                    for hh in (1,4):
+                        realized=prices.shift(-hh)/prices-1
+                        known=realized.shift(hh)
+                        cond=known.where(trend.shift(hh).fillna(False).astype(bool))
+                        half=known.abs().rolling(720,min_periods=600).quantile(.75)
+                        low_all=known.rolling(720,min_periods=600).quantile(.125)
+                        high_all=known.rolling(720,min_periods=600).quantile(.875)
+                        low_cond=cond.rolling(720,min_periods=120).quantile(.125)
+                        high_cond=cond.rolling(720,min_periods=120).quantile(.875)
+                        low=low_cond.where(trend,low_all).fillna(low_all)
+                        high=high_cond.where(trend,high_all).fillna(high_all)
+                        frame=pd.DataFrame({"time":times,"realized":realized,"half":half,"low":low,"high":high,"trend":trend})
+                        frame=frame[(frame.time>=cutoff)&frame.trend].dropna()
+                        if frame.empty:
+                            records.append({"周期":f"{hh}小时","新上涨样本":0,"原版覆盖率%":"待积累","B同宽覆盖率%":"待积累","同宽总宽%":"待积累"})
+                            continue
+                        center=(frame.low+frame.high)/2
+                        hit_original=(frame.realized.abs()<=frame.half).mean()*100
+                        hit_b=((frame.realized>=center-frame.half)&(frame.realized<=center+frame.half)).mean()*100
+                        records.append({"周期":f"{hh}小时","新上涨样本":len(frame),"原版覆盖率%":round(hit_original,2),"B同宽覆盖率%":round(hit_b,2),"同宽总宽%":round((2*frame.half).mean()*100,3)})
+                    st.dataframe(pd.DataFrame(records),use_container_width=True,hide_index=True)
+                    st.caption("仅统计截止时间之后且未来结果已完成的预测点；新样本不足时不作胜负结论。重叠窗口非独立交易，当前算法与阈值必须保持冻结，才能保留前瞻验证意义。")
+                except Exception as exc:
+                    st.warning(f"前瞻验证暂不可用：{exc}")
             st.subheader("📉 事件发布后的历史K线反应")
             st.caption("按新闻源标注的发布时间匹配OKX已收盘1小时K线；仅描述价格变化，不能证明事件导致涨跌。")
             try:
