@@ -343,6 +343,35 @@ with tab1:
                     st.caption("每个预测点只使用当时已知历史数据计算区间；未来1小时/4小时结果用于事后核验。预测窗口存在重叠，分类命中率不是独立交易胜率。")
                 except Exception as exc:st.warning(f"分类回测暂不可用：{exc}")
             st.caption("官方时间核对入口：BLS发布日程 https://www.bls.gov/schedule/news_release/ ｜ FOMC https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm 。候选事件发布时间尚未逐条验证，不参与本项回测。")
+            st.subheader("🧪 上涨趋势动态区间：样本外对照")
+            st.caption("仅用预测时已知的24小时涨跌判断趋势；动态区间使用过去720个已完成的收益窗口，分别估算上沿和下沿。与对称75分位区间在同一测试点对照。")
+            if st.button("▶️ 运行动态区间样本外回测", key="run_asymmetric_oos"):
+                try:
+                    hist = historical_hourly(pair)
+                    close = hist.close.astype(float).reset_index(drop=True)
+                    split = int(len(close)*0.7)
+                    out = []
+                    trend = close / close.shift(24) - 1 > 0.01
+                    for horizon in (1,4):
+                        future = close.shift(-horizon)/close-1
+                        known = future.shift(horizon)
+                        up = known.clip(lower=0).rolling(720,min_periods=600).quantile(.75)
+                        down = (-known.clip(upper=0)).rolling(720,min_periods=600).quantile(.75)
+                        symmetric = known.abs().rolling(720,min_periods=600).quantile(.75)
+                        frame = pd.DataFrame({"actual":future,"up":up,"down":down,"sym":symmetric,"trend":trend}).iloc[split:len(close)-horizon].dropna()
+                        for name,sub in (("全部",frame),("上涨趋势",frame[frame.trend])):
+                            if sub.empty: continue
+                            baseline = sub.actual.abs() <= sub.sym
+                            dynamic = (sub.actual >= -sub.down) & (sub.actual <= sub.up)
+                            out.extend([
+                                {"周期":f"{horizon}小时","行情":name,"模型":"原实验版：对称75分位","预测点":len(sub),"覆盖率%":round(baseline.mean()*100,2),"平均总宽%":round((2*sub.sym).mean()*100,3)},
+                                {"周期":f"{horizon}小时","行情":name,"模型":"新实验版：非对称分位","预测点":len(sub),"覆盖率%":round(dynamic.mean()*100,2),"平均总宽%":round((sub.up+sub.down).mean()*100,3)}
+                            ])
+                    if out: st.dataframe(pd.DataFrame(out),use_container_width=True,hide_index=True)
+                    else: st.warning("可用测试样本不足")
+                    st.caption("这是不含交易成本的区间覆盖率，不是方向准确率或交易胜率；重叠预测点存在相关性，尚需多时段检验。")
+                except Exception as exc:
+                    st.warning(f"动态区间回测暂不可用：{exc}")
             st.subheader("📉 事件发布后的历史K线反应")
             st.caption("按新闻源标注的发布时间匹配OKX已收盘1小时K线；仅描述价格变化，不能证明事件导致涨跌。")
             try:
@@ -457,6 +486,29 @@ with tab1:
                 st.caption("采用最近720个已完成的历史收益窗口估算宽度，中心为当前实时价格；与此前一年样本外回测的历史测试期不同，历史命中率不可直接视为当前区间的保证。")
             except Exception as exc:
                 st.warning(f"实验版区间暂不可用：{exc}")
+        st.subheader("🧪 实验版B：趋势感知非对称区间（1小时 / 4小时）")
+        st.caption("保留上方原实验版。趋势仅用已收盘小时K线的过去24小时变化识别；上涨趋势阈值为1%，不是上涨概率。")
+        if last is None or age is None or age > 120:
+            st.warning("实时价格不可用或过期，实验版B暂停显示。")
+        else:
+            try:
+                hist = candles(pair,"1H")
+                closes = hist.close.astype(float).reset_index(drop=True)
+                trend24 = float(closes.iloc[-1]/closes.iloc[-25]-1) if len(closes)>=25 else float("nan")
+                trend_label = "上涨趋势" if trend24>0.01 else ("下跌趋势" if trend24< -0.01 else "震荡")
+                st.write(f"已收盘小时线过去24小时变化：{trend24*100:+.2f}%｜分类：{trend_label}")
+                dynamic_rows=[]
+                for hh in (1,4):
+                    returns = closes.shift(-hh)/closes-1
+                    known = returns.iloc[:-hh].tail(720).dropna()
+                    if len(known)<600: raise ValueError(f"{hh}小时有效历史窗口不足600")
+                    upside = float(known.clip(lower=0).quantile(.75))
+                    downside = float((-known.clip(upper=0)).quantile(.75))
+                    dynamic_rows.append({"周期":f"{hh}小时","模型":"实验版B：非对称75分位","下沿 USDT":round(max(0,last*(1-downside)),2),"上沿 USDT":round(last*(1+upside),2),"下行宽%":round(downside*100,3),"上行宽%":round(upside*100,3)})
+                st.dataframe(pd.DataFrame(dynamic_rows),use_container_width=True,hide_index=True)
+                st.caption("上下沿分别从历史正负收益估计，目前趋势只作标签，不据此放大区间；是否改善上涨行情覆盖率，请到高级研究运行同点回测。")
+            except Exception as exc:
+                st.warning(f"实验版B暂不可用：{exc}")
         st.info("事件风险：币圈新闻、美联储公告、CPI及非农可能使波动超出区间。目前未验证新闻发布时间及情绪，暂不将标题机械转换成涨跌或波动倍数。")
         st.divider()
         st.subheader("🧮 模拟入场与仓位风险")
