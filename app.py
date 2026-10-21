@@ -42,6 +42,26 @@ def candles(inst, bar):
     df["ts"] = pd.to_datetime(pd.to_numeric(df.ts), unit="ms", utc=True).dt.tz_convert("Asia/Shanghai")
     return df.dropna(subset=["close"]).drop_duplicates("ts").sort_values("ts").tail(1200 if bar == "1H" else (800 if bar == "1W" else 240)).reset_index(drop=True)
 
+@st.cache_data(ttl=86400, show_spinner=False)
+def historical_hourly(inst):
+    rows, cursor = [], None
+    for _ in range(90):
+        params = {"instId":inst,"bar":"1H","limit":"100"}
+        if cursor is not None: params["after"] = str(cursor)
+        batch = okx("/api/v5/market/history-candles", params)
+        if not batch: break
+        oldest = min(int(x[0]) for x in batch)
+        if cursor is not None and oldest >= cursor: break
+        rows.extend(batch)
+        cursor = oldest
+        if len(rows) >= 8800: break
+    if not rows: raise RuntimeError("历史小时线接口未返回数据")
+    frame = pd.DataFrame(rows, columns=["ts","open","high","low","close","vol","volCcy","volQuote","confirm"])
+    frame = frame[frame.confirm == "1"].copy()
+    frame["ts"] = pd.to_datetime(pd.to_numeric(frame.ts),unit="ms",utc=True).dt.tz_convert("Asia/Shanghai")
+    frame["close"] = pd.to_numeric(frame.close,errors="coerce")
+    return frame.dropna(subset=["ts","close"]).drop_duplicates("ts").sort_values("ts").tail(8760).reset_index(drop=True)
+
 @st.cache_data(ttl=15, show_spinner=False)
 def market(inst):
     def safe(path, params):
@@ -188,6 +208,21 @@ with tab1:
             except Exception:
                 coverage.append({"数据":label,"已收盘K线":0,"起始时间":"不可用","结束时间":"不可用"})
         st.dataframe(pd.DataFrame(coverage),use_container_width=True,hide_index=True)
+        if st.button("🔎 拉取一年小时K线并检查完整性", key="historical_check"):
+            try:
+                with st.spinner("正在分页获取历史小时线，可能需要一些时间……"):
+                    history = historical_hourly(pair)
+                gaps = history.ts.diff().dropna().dt.total_seconds().div(3600)
+                missing = int((gaps[gaps > 1.01].round().astype(int)-1).clip(lower=0).sum())
+                duplicates = int(history.ts.duplicated().sum())
+                st.write(f"交易对：{pair}｜已收盘小时K线：{len(history)} 条｜时间范围：{history.ts.iloc[0]} 至 {history.ts.iloc[-1]}")
+                st.write(f"缺失小时数（按时间戳间隔估算）：{missing}｜重复时间戳：{duplicates}｜目标：8760条")
+                if len(history) < 8760 or missing:
+                    st.warning("历史覆盖未达到完整一年或存在缺口，暂不能据此进行全年宏观事件小时级回测。")
+                else:
+                    st.success("已取得约一年连续小时K线，可进入事件时间匹配阶段；尚未验证宏观事件数据。")
+            except Exception as exc:
+                st.warning(f"历史数据扩充未完成：{exc}。原有行情分析不受影响。")
         st.info("待接入：CPI公布时间、非农公布时间、FOMC决议时间及各自历史实际值。没有经过官方核对的事件，不计入宏观事件回测。")
         st.caption("历史事件数据需与BTC/ETH价格历史重叠，才能计算事件后1小时、4小时和24小时波动；暂不据此调整参考区间。")
         st.subheader("📉 事件发布后的历史K线反应")
