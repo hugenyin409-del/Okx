@@ -178,6 +178,18 @@ with tab1:
                 st.warning(f"{label}事件源读取失败，不能据此判断没有风险。")
         st.caption("官方数据核对：CPI https://www.bls.gov/cpi/ ｜ 非农 https://www.bls.gov/news.release/empsit.toc.htm ｜ FOMC https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm")
         st.info("事件对历史K线的量化归因与回测尚未完成；新闻公告目前不会改变价格区间或开仓参考。")
+        st.subheader("🗃️ 历史宏观事件样本库（建设中）")
+        st.caption("按事件类型、官方发布时间、数据来源及K线覆盖范围分开核验。尚未建立完整一年的CPI、非农、FOMC历史事件库。")
+        coverage = []
+        for label, tf in (("小时行情","1H"),("日线行情","1D")):
+            try:
+                hist = candles(pair,tf)
+                coverage.append({"数据":label,"已收盘K线":len(hist),"起始时间":str(hist.ts.iloc[0]),"结束时间":str(hist.ts.iloc[-1])})
+            except Exception:
+                coverage.append({"数据":label,"已收盘K线":0,"起始时间":"不可用","结束时间":"不可用"})
+        st.dataframe(pd.DataFrame(coverage),use_container_width=True,hide_index=True)
+        st.info("待接入：CPI公布时间、非农公布时间、FOMC决议时间及各自历史实际值。没有经过官方核对的事件，不计入宏观事件回测。")
+        st.caption("历史事件数据需与BTC/ETH价格历史重叠，才能计算事件后1小时、4小时和24小时波动；暂不据此调整参考区间。")
         st.subheader("📉 事件发布后的历史K线反应")
         st.caption("按新闻源标注的发布时间匹配OKX已收盘1小时K线；仅描述价格变化，不能证明事件导致涨跌。")
         try:
