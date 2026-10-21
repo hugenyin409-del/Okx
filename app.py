@@ -82,6 +82,14 @@ hr{border-color:rgba(130,159,191,.12)!important;margin:1.15rem 0!important}
 @media(max-width:768px){.block-container{padding:1rem .8rem 2rem!important}.nexus-hero{padding:21px 19px!important}.nexus-hero:after{opacity:.35}[data-testid="stMetric"]{padding:13px!important}[data-testid="stMetricValue"]{font-size:1.18rem!important}}
 @media(prefers-reduced-motion:reduce){div.stButton>button,div.stFormSubmitButton>button{transition:none!important;transform:none!important}}
 
+
+/* Compact workspace tiles; keep navigation as native Streamlit buttons. */
+.nexus-workspace-label{font-size:10px;letter-spacing:.17em;color:#819bb6;margin:0 0 7px;font-weight:750}
+.nexus-workspace-label span{letter-spacing:0;font-weight:500;color:#86c9ed;margin-left:6px}
+[class*="st-key-workspace_top_"] button{min-height:57px!important;height:57px!important;padding:7px 5px!important;border-radius:11px!important;background:linear-gradient(145deg,rgba(21,37,58,.97),rgba(12,23,38,.98))!important;border:1px solid rgba(121,158,198,.2)!important;box-shadow:none!important;font-size:clamp(10px,1.2vw,13px)!important;font-weight:650!important;line-height:1.3!important;white-space:normal!important}
+[class*="st-key-workspace_top_"] button[kind="primary"]{background:linear-gradient(145deg,#153d60,#102b45)!important;border-color:rgba(97,194,246,.7)!important;box-shadow:inset 0 0 0 1px rgba(78,170,222,.12)!important}
+[class*="st-key-workspace_top_"] button:hover{border-color:#68c4f1!important}
+@media(max-width:768px){[class*="st-key-workspace_top_"] button{min-height:52px!important;height:52px!important;padding:5px 2px!important;font-size:10px!important;border-radius:9px!important}.nexus-workspace-label{margin-bottom:5px}}
 </style>
 """,unsafe_allow_html=True)
 
@@ -311,7 +319,8 @@ def switch_workspace(target):
     st.session_state["nexus_close_sidebar_requested"] = True
 
 workspace_names = ["📊 行情总览", "🔬 高级研究", "📰 市场新闻", "🏦 宏观日历"]
-st.caption("当前工作区：" + st.session_state.get("research_navigation", workspace_names[0]))
+# Compact four-tile navigation; selection remains synchronized with the sidebar.
+st.markdown('<div class="nexus-workspace-label">WORKSPACE <span>· ' + research_view + '</span></div>', unsafe_allow_html=True)
 workspace_cols = st.columns(4, gap="small")
 for workspace_col, workspace_name in zip(workspace_cols, workspace_names):
     with workspace_col:
