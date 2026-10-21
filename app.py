@@ -25,7 +25,7 @@ def okx(path, params=None):
 @st.cache_data(ttl=90, show_spinner=False)
 def candles(inst, bar):
     rows, cursor = [], None
-    for _ in range(3):
+    for _ in range(8 if bar == "1W" else 3):
         p = {"instId": inst, "bar": bar, "limit": "100"}
         if cursor: p["after"] = str(cursor)
         batch = okx("/api/v5/market/history-candles", p)
@@ -40,7 +40,7 @@ def candles(inst, bar):
     for c in ["open","high","low","close","vol"]:
         df[c] = pd.to_numeric(df[c], errors="coerce")
     df["ts"] = pd.to_datetime(pd.to_numeric(df.ts), unit="ms", utc=True).dt.tz_convert("Asia/Shanghai")
-    return df.dropna(subset=["close"]).drop_duplicates("ts").sort_values("ts").tail(240).reset_index(drop=True)
+    return df.dropna(subset=["close"]).drop_duplicates("ts").sort_values("ts").tail(800 if bar == "1W" else 240).reset_index(drop=True)
 
 @st.cache_data(ttl=15, show_spinner=False)
 def market(inst):
@@ -92,7 +92,7 @@ def fmt(value, digits=2):
     except (ValueError,TypeError): return "暂无"
 
 pair = st.selectbox("交易对", ["BTC-USDT-SWAP","ETH-USDT-SWAP"])
-bar = st.radio("K 线周期", ["15m","1H","4H","1D"], index=2, horizontal=True)
+bar = st.radio("K 线周期", ["15m","1H","4H","1D","1W"], index=2, horizontal=True)
 a,b,c = st.columns(3)
 with a: capital = st.number_input("模拟本金（USDT）", min_value=100.0, value=1000.0, step=100.0)
 with b: risk_pct = st.slider("单笔模拟风险占本金（%）", 0.25, 50.0, 1.0, 0.25)
