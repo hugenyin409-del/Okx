@@ -25,7 +25,7 @@ def okx(path, params=None):
 @st.cache_data(ttl=90, show_spinner=False)
 def candles(inst, bar):
     rows, cursor = [], None
-    for _ in range(8 if bar == "1W" else 3):
+    for _ in range(12 if bar == "1H" else (8 if bar == "1W" else 3)):
         p = {"instId": inst, "bar": bar, "limit": "100"}
         if cursor: p["after"] = str(cursor)
         batch = okx("/api/v5/market/history-candles", p)
@@ -40,7 +40,7 @@ def candles(inst, bar):
     for c in ["open","high","low","close","vol"]:
         df[c] = pd.to_numeric(df[c], errors="coerce")
     df["ts"] = pd.to_datetime(pd.to_numeric(df.ts), unit="ms", utc=True).dt.tz_convert("Asia/Shanghai")
-    return df.dropna(subset=["close"]).drop_duplicates("ts").sort_values("ts").tail(800 if bar == "1W" else 240).reset_index(drop=True)
+    return df.dropna(subset=["close"]).drop_duplicates("ts").sort_values("ts").tail(1200 if bar == "1H" else (800 if bar == "1W" else 240)).reset_index(drop=True)
 
 @st.cache_data(ttl=15, show_spinner=False)
 def market(inst):
@@ -178,6 +178,36 @@ with tab1:
                 st.warning(f"{label}事件源读取失败，不能据此判断没有风险。")
         st.caption("官方数据核对：CPI https://www.bls.gov/cpi/ ｜ 非农 https://www.bls.gov/news.release/empsit.toc.htm ｜ FOMC https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm")
         st.info("事件对历史K线的量化归因与回测尚未完成；新闻公告目前不会改变价格区间或开仓参考。")
+        st.subheader("📉 事件发布后的历史K线反应")
+        st.caption("按新闻源标注的发布时间匹配OKX已收盘1小时K线；仅描述价格变化，不能证明事件导致涨跌。")
+        try:
+            event_candles = candles(pair, "1H")
+            event_times = pd.to_datetime(event_candles.ts, utc=True)
+            event_closes = event_candles.close.astype(float).to_numpy()
+            event_rows = []
+            for source_name, source_url in (("美联储公告", "https://www.federalreserve.gov/feeds/press_monetary.xml"), ("币圈新闻", "https://www.coindesk.com/arc/outboundfeeds/rss/")):
+                try:
+                    items = feed(source_url)
+                except Exception:
+                    continue
+                for item in items[:8]:
+                    stamp = pd.to_datetime(item.get("published", ""), utc=True, errors="coerce")
+                    if pd.isna(stamp): continue
+                    start_idx = int(event_times.searchsorted(stamp, side="right"))
+                    if start_idx < 1 or start_idx + 24 >= len(event_closes): continue
+                    if abs((event_times.iloc[start_idx] - stamp).total_seconds()) > 7200: continue
+                    baseline = event_closes[start_idx-1]
+                    if baseline <= 0: continue
+                    changes = [(event_closes[start_idx+h-1] / baseline - 1) * 100 for h in (1,4,24)]
+                    event_rows.append({"事件源":source_name, "发布时间(北京时间)":stamp.tz_convert("Asia/Shanghai").strftime("%m-%d %H:%M"), "标题":str(item.get("title",""))[:42], "1小时%":round(changes[0],2), "4小时%":round(changes[1],2), "24小时%":round(changes[2],2)})
+            if event_rows:
+                st.dataframe(pd.DataFrame(event_rows).head(12), use_container_width=True, hide_index=True)
+                st.caption("起点为事件发布时间之前最近一根已收盘1小时K线的收盘价；新闻发布不一定等于经济数据实际公布时刻。")
+            else:
+                st.info("当前新闻源与可用K线时间没有足够重合，暂不展示事件回报，避免伪造历史结果。")
+        except Exception as exc:
+            st.warning(f"事件历史反应暂不可用：{exc}")
+        st.caption("CPI、非农的历史实际公布时间及市场预期差尚未结构化接入，因此不参与本次事件统计，也不自动改变交易方向。")
         q1,q2,q3,q4=st.columns(4)
         q1.metric("RSI 14",fmt(row.rsi,1))
         q2.metric("ATR 14",fmt(row.atr))
