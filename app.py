@@ -151,11 +151,31 @@ def login_gate():
 
 login_gate()
 with st.sidebar:
-    st.markdown('<div class="nexus-brand">◈ NEXUS TERMINAL</div>',unsafe_allow_html=True)
-    st.caption("FREE RESEARCH ACCESS")
-    st.write("👤 "+st.session_state["member_email"])
-    if st.button("退出登录",key="nexus_logout",use_container_width=True):
-        st.session_state.pop("member_email",None)
+    st.markdown('<div class="nexus-brand">◈ NEXUS TERMINAL</div>', unsafe_allow_html=True)
+    st.caption("DIGITAL MARKET INTELLIGENCE")
+    st.divider()
+    st.markdown("##### 👤 会员账户")
+    st.caption("当前登录")
+    st.write(st.session_state["member_email"])
+    st.success("● FREE 会员 · 已登录")
+    st.divider()
+    st.markdown("##### 🧭 研究导航")
+    st.page_link("app.py", label="📊 行情研究总览", icon="📈")
+    st.caption("行情分析、K线图和多周期预测均位于主页面；高级研究可在主页面展开。")
+    with st.expander("📚 使用指南", expanded=False):
+        st.write("**行情与参考位**：查看市场价格、预测区间和K线。")
+        st.write("**币圈新闻**：浏览市场信息。")
+        st.write("**美联储与宏观**：查看事件风险。")
+        st.write("**高级研究**：展开历史回测与前瞻验证。")
+    with st.expander("⚙️ 会员中心", expanded=False):
+        st.write("会员等级：免费会员")
+        st.write("登录邮箱：", st.session_state["member_email"])
+        st.caption("当前为测试版账号系统，邮箱验证、密码找回及付费会员尚未开放。")
+    st.divider()
+    st.caption("NEXUS RESEARCH · BETA")
+    st.caption("仅供研究与风险参考，不提供投资建议，不自动交易。")
+    if st.button("↪ 退出登录", key="nexus_logout", use_container_width=True):
+        st.session_state.pop("member_email", None)
         st.rerun()
 
 st.markdown('<div class="nexus-kicker">NEXUS / MARKET INTELLIGENCE</div>',unsafe_allow_html=True)
