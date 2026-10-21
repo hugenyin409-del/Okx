@@ -207,6 +207,16 @@ with tab1:
                 st.info("当前新闻源与可用K线时间没有足够重合，暂不展示事件回报，避免伪造历史结果。")
         except Exception as exc:
             st.warning(f"事件历史反应暂不可用：{exc}")
+        if event_rows:
+            st.subheader("🧪 事件样本波动统计（探索性）")
+            event_stats = pd.DataFrame(event_rows)
+            for horizon in ("1小时%", "4小时%", "24小时%"):
+                samples = pd.to_numeric(event_stats[horizon], errors="coerce").dropna().abs()
+                if len(samples) >= 5:
+                    st.write(f"{horizon}｜样本 {len(samples)} 条｜绝对涨跌中位数 {samples.median():.2f}%｜75分位 {samples.quantile(0.75):.2f}%")
+                else:
+                    st.write(f"{horizon}｜有效样本仅 {len(samples)} 条，不足以校准波动区间。")
+            st.caption("新闻样本并非随机抽样，可能有重复报道和选择偏差；仅做探索性统计，暂不据此放大交易区间或输出方向概率。")
         st.caption("CPI、非农的历史实际公布时间及市场预期差尚未结构化接入，因此不参与本次事件统计，也不自动改变交易方向。")
         q1,q2,q3,q4=st.columns(4)
         q1.metric("RSI 14",fmt(row.rsi,1))
