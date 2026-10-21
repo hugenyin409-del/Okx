@@ -173,24 +173,37 @@ with tab1:
         fig.update_layout(height=440,xaxis_rangeslider_visible=False,margin=dict(l=5,r=5,t=20,b=5))
         st.plotly_chart(fig,use_container_width=True)
         st.subheader("🎯 分时段参考区间（1小时 / 4小时 / 1天）")
-        st.caption("以最新成交价为中心，按对应周期ATR估算波动带；不代表未来必然触及，也不是交易指令。")
+        st.caption("结合一年日线历史波动、24小时波动、资金费率和多周期趋势；新闻/宏观仅标注事件风险，未接入AI新闻语义模型。")
         if last is None or age is None or age > 120:
             st.error("实时成交价缺失或过期，暂停计算分时段参考区间。")
         else:
-            for horizon, timeframe in (("未来1小时","1H"),("未来4小时","4H"),("未来1天","1D")):
-                try:
-                    hd = indicators(candles(pair,timeframe))
-                    if len(hd)<30: raise ValueError("K线样本不足")
-                    hr = hd.iloc[-1]
-                    width = float(hr.atr)
-                    if not np.isfinite(width) or width<=0: raise ValueError("波动率不可用")
-                    low, high = max(0,last-width), last+width
-                    support = float(hd.low.tail(20).min())
-                    resistance = float(hd.high.tail(20).max())
-                    st.markdown(f"**{horizon}**｜ATR波动参考 **{low:,.2f} ～ {high:,.2f} USDT**")
-                    st.caption(f"{timeframe} 最近20根已收盘K线支撑参考 {support:,.2f}，阻力参考 {resistance:,.2f} USDT；ATR为历史平均波幅，不是预测区间的统计置信界限。")
-                except Exception as exc:
-                    st.warning(f"{horizon} 参考区间暂不可用：{exc}")
+            try:
+                annual = indicators(candles(pair,"1D"))
+                daily_returns = np.log(annual.close / annual.close.shift(1)).dropna()
+                if len(daily_returns)<180: raise ValueError("日线样本不足180天")
+                annual_sigma = float(daily_returns.tail(240).std())
+                if not np.isfinite(annual_sigma) or annual_sigma<=0: raise ValueError("年度历史波动数据无效")
+                change24 = abs(last/float(t.get("open24h") or last)-1)
+                funding_rate = abs(float(fund.get("fundingRate") or 0))
+                for label, tf, hours in (("未来1小时","1H",1),("未来4小时","4H",4),("未来1天","1D",24)):
+                    try:
+                        hd=indicators(candles(pair,tf))
+                        if len(hd)<30: raise ValueError("K线样本不足")
+                        atr=float(hd.iloc[-1].atr)
+                        annual_band=last*annual_sigma*np.sqrt(hours/24)
+                        intraday_band=last*change24*np.sqrt(hours/24)
+                        width=max(atr,annual_band,0.5*intraday_band)
+                        if funding_rate>0.001: width*=1.10
+                        support=float(hd.low.tail(20).min())
+                        resistance=float(hd.high.tail(20).max())
+                        st.markdown(f"**{label}**｜历史波动参考 **{max(0,last-width):,.2f} ～ {last+width:,.2f} USDT**")
+                        st.caption(f"参考波幅 ±{width/last*100:.2f}%｜{tf}近期支撑 {support:,.2f}｜阻力 {resistance:,.2f} USDT")
+                    except Exception as exc:
+                        st.warning(f"{label} 暂不可用：{exc}")
+                st.caption(f"日线历史样本 {len(daily_returns)} 天；长期波动率取最近最多240个日收益；24小时变化参与波幅估计。该范围没有统计覆盖率保证。")
+            except Exception as exc:
+                st.warning(f"长期历史波动分析不可用：{exc}")
+        st.info("事件风险：币圈新闻、美联储公告、CPI及非农可能使波动超出区间。目前未验证新闻发布时间及情绪，暂不将标题机械转换成涨跌或波动倍数。")
         st.divider()
         st.subheader("🧮 模拟入场与仓位风险")
         st.caption("仅按已收盘 K 线生成方向和 ATR 参考位；入场以最近收盘价为观察参考，不等于当前可成交价格。")
