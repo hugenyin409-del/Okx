@@ -256,15 +256,14 @@ def login_gate():
         st.caption("当前为免费注册测试版：尚未发送邮箱验证邮件，也没有找回密码功能。正式对外开放前需要持久化数据库、邮箱验证和完善的安全防护。")
     st.stop()
 
-login_gate()
+# Public beta: membership login and registration are temporarily disabled.
 with st.sidebar:
     st.markdown('<div class="nexus-brand">◈ NEXUS TERMINAL</div>', unsafe_allow_html=True)
     st.caption("DIGITAL MARKET INTELLIGENCE")
     st.divider()
-    st.markdown("##### 👤 会员账户")
-    st.caption("当前登录")
-    st.write(st.session_state["member_email"])
-    st.success("● FREE 会员 · 已登录")
+    st.markdown("##### 🔓 公开测试")
+    st.success("● 免登录访问 · 暂时开放")
+    st.caption("会员登录与注册已暂停；原有会员记录保留。")
     st.divider()
     st.markdown("##### 🧭 研究导航")
     def on_research_navigation_change():
@@ -310,25 +309,13 @@ with st.sidebar:
         st.write("**币圈新闻**：浏览市场信息。")
         st.write("**美联储与宏观**：查看事件风险。")
         st.write("**高级研究**：从左侧工作区单独进入。")
-    with st.expander("⚙️ 会员中心", expanded=False):
-        st.write("会员等级：免费会员")
-        st.write("登录邮箱：", st.session_state["member_email"])
-        st.caption("当前为测试版账号系统，邮箱验证、密码找回及付费会员尚未开放。")
     st.divider()
     st.markdown("##### 🖥️ 系统运行状态")
     st.success("● 页面服务：运行中")
-    try:
-        with auth_connection() as status_db:
-            status_db.execute("SELECT 1").fetchone()
-        st.success("● 会员数据库：连接正常")
-    except Exception:
-        st.warning("● 会员数据库：连接异常")
+    st.caption("● 会员登录：已暂停")
     st.caption("行情接口状态请以主页面实际加载结果为准；此处不代表交易所接口已检测。")
     st.caption("NEXUS RESEARCH · BETA")
     st.caption("仅供研究与风险参考，不提供投资建议，不自动交易。")
-    if st.button("↪ 退出登录", key="nexus_logout", use_container_width=True):
-        st.session_state.pop("member_email", None)
-        st.rerun()
 
 st.markdown('<div class="nexus-ticker"><span>📢 NEXUS 平台内测期间免费开放　｜　预测区间仅供研究参考，不保证准确率或交易收益　｜　欢迎在页面底部反馈预测体验与改进建议　｜　感谢参与内测</span></div>',unsafe_allow_html=True)
 # Keep both navigation widgets in sync using callbacks (before widgets render).
@@ -1104,10 +1091,10 @@ with st.form("nexus_member_feedback",clear_on_submit=True):
                 feedback_time=datetime.now(timezone.utc).isoformat()
                 with auth_connection() as feedback_db:
                     feedback_db.execute("INSERT INTO member_feedback(email,period,rating,comment,created_at) VALUES(?,?,?,?,?)",(
-                        st.session_state["member_email"],feedback_period,feedback_rating,feedback_comment.strip(),
+                        "anonymous",feedback_period,feedback_rating,feedback_comment.strip(),
                         feedback_time))
                 mail_ok,mail_status=send_feedback_email(
-                    st.session_state["member_email"],feedback_period,feedback_rating,feedback_comment.strip(),feedback_time)
+                    "anonymous",feedback_period,feedback_rating,feedback_comment.strip(),feedback_time)
                 if mail_ok:
                     st.success("反馈已记录，并已发送邮件通知。感谢参与内测！")
                 elif mail_status=="not_configured":
