@@ -91,6 +91,17 @@ def fmt(value, digits=2):
     try: return f"{float(value):,.{digits}f}"
     except (ValueError,TypeError): return "暂无"
 
+@st.cache_data(ttl=300, show_spinner=False)
+def multi_timeframe(inst):
+    result = {}
+    for tf in ("4H", "1D", "1W"):
+        try:
+            data = indicators(candles(inst, tf))
+            result[tf] = direction(data.iloc[-1])[0] if len(data) >= 60 else "样本不足"
+        except Exception:
+            result[tf] = "数据不可用"
+    return result
+
 pair = st.selectbox("交易对", ["BTC-USDT-SWAP","ETH-USDT-SWAP"])
 bar = st.radio("K 线周期", ["15m","1H","4H","1D","1W"], index=2, horizontal=True)
 a,b,c = st.columns(3)
@@ -103,6 +114,7 @@ fee_pct = st.number_input("假设单边手续费（%）", min_value=0.0, max_val
 slip_pct = st.number_input("假设单边滑点（%）", min_value=0.0, max_value=1.0, value=0.02, step=0.01)
 if st.button("🔄 手动刷新数据"):
     candles.clear()
+    multi_timeframe.clear()
     market.clear()
     feed.clear()
     st.rerun()
@@ -130,6 +142,25 @@ with tab1:
             if age>120: st.error("最新成交数据超过120秒，暂停方向性模拟参考。")
         st.caption("最近已收盘 K 线：" + row.ts.strftime("%Y-%m-%d %H:%M") + "（北京时间）。技术指标以已收盘 K 线计算，最新成交价单独显示。")
         st.info(f"技术判断：{direction_text}。依据：{reason}。不构成交易建议。")
+        st.subheader("🧠 多周期与24小时综合参考")
+        trends = multi_timeframe(pair)
+        st.write("｜".join(f"{tf}：{trends[tf]}" for tf in ("4H","1D","1W")))
+        valid = list(trends.values())
+        bull, bear = valid.count("偏多"), valid.count("偏空")
+        if last is None or age is None or age > 120 or any(v in ("样本不足","数据不可用") for v in valid):
+            overall = "行情不完整，优先观望"
+        elif bull >= 2 and bear == 0:
+            overall = "多周期偏多，等待回踩确认"
+        elif bear >= 2 and bull == 0:
+            overall = "多周期偏空，等待反弹确认"
+        else:
+            overall = "多周期分歧，优先观望"
+        st.markdown(f"**综合技术参考：{overall}**")
+        if last is not None and t.get("open24h"):
+            open24 = float(t["open24h"])
+            if open24 > 0:
+                st.write(f"24小时涨跌：{(last/open24-1)*100:+.2f}%｜最高：{fmt(t.get('high24h'))}｜最低：{fmt(t.get('low24h'))} USDT")
+        st.caption("多周期方向基于已收盘K线。币圈新闻和美联储公告仅作为事件背景，尚未纳入方向评分；未调用AI大模型，不冒充AI预测。")
         q1,q2,q3,q4=st.columns(4)
         q1.metric("RSI 14",fmt(row.rsi,1))
         q2.metric("ATR 14",fmt(row.atr))
