@@ -7,8 +7,8 @@ import feedparser
 from datetime import datetime, timezone
 
 st.set_page_config(page_title="OKX BTC ETH 合约研究台 Pro", page_icon="📈", layout="wide")
-st.title("📈 OKX BTC / ETH 合约研究台 · 稳定增强版 v3")
-st.caption("免费公开数据 · 最新成交与标记价格 · 多周期技术分析 · 合约风险模拟 · 新闻与宏观 · 不自动下单")
+st.title("📈 BTC / ETH 行情预测")
+st.caption("简洁版 · 1小时 / 4小时预测 · 风险模拟 · 高级研究可展开 · 不自动下单")
 
 BASE = "https://www.okx.com"
 S = requests.Session()
@@ -181,230 +181,232 @@ with tab1:
             if open24 > 0:
                 st.write(f"24小时涨跌：{(last/open24-1)*100:+.2f}%｜最高：{fmt(t.get('high24h'))}｜最低：{fmt(t.get('low24h'))} USDT")
         st.caption("多周期方向基于已收盘K线。币圈新闻和美联储公告仅作为事件背景，尚未纳入方向评分；未调用AI大模型，不冒充AI预测。")
-        st.subheader("🗞️ 新闻与宏观事件观察")
-        st.caption("事件信息独立于技术信号；尚未将新闻情绪或CPI/非农预期差转换成方向分数。")
-        for label, url in (("美联储", "https://www.federalreserve.gov/feeds/press_monetary.xml"), ("币圈", "https://www.coindesk.com/arc/outboundfeeds/rss/")):
-            try:
-                entries = feed(url)
-                if not entries:
-                    st.warning(f"{label}事件源暂无可用条目。")
-                for item in entries[:3]:
-                    title = item.get("title", "事件公告")
-                    link = item.get("link", "")
-                    published = item.get("published", "发布时间未知")
-                    st.write(f"{label}｜{published}｜{title}")
-                    if link: st.markdown(f"[查看原文]({link})")
-            except Exception:
-                st.warning(f"{label}事件源读取失败，不能据此判断没有风险。")
-        st.caption("官方数据核对：CPI https://www.bls.gov/cpi/ ｜ 非农 https://www.bls.gov/news.release/empsit.toc.htm ｜ FOMC https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm")
-        st.info("事件对历史K线的量化归因与回测尚未完成；新闻公告目前不会改变价格区间或开仓参考。")
-        st.subheader("🗃️ 历史宏观事件样本库（建设中）")
-        st.caption("按事件类型、官方发布时间、数据来源及K线覆盖范围分开核验。尚未建立完整一年的CPI、非农、FOMC历史事件库。")
-        coverage = []
-        for label, tf in (("小时行情","1H"),("日线行情","1D")):
-            try:
-                hist = candles(pair,tf)
-                coverage.append({"数据":label,"已收盘K线":len(hist),"起始时间":str(hist.ts.iloc[0]),"结束时间":str(hist.ts.iloc[-1])})
-            except Exception:
-                coverage.append({"数据":label,"已收盘K线":0,"起始时间":"不可用","结束时间":"不可用"})
-        st.dataframe(pd.DataFrame(coverage),use_container_width=True,hide_index=True)
-        if st.button("🔎 拉取一年小时K线并检查完整性", key="historical_check"):
-            try:
-                with st.spinner("正在分页获取历史小时线，可能需要一些时间……"):
-                    history = historical_hourly(pair)
-                gaps = history.ts.diff().dropna().dt.total_seconds().div(3600)
-                missing = int((gaps[gaps > 1.01].round().astype(int)-1).clip(lower=0).sum())
-                duplicates = int(history.ts.duplicated().sum())
-                st.write(f"交易对：{pair}｜已收盘小时K线：{len(history)} 条｜时间范围：{history.ts.iloc[0]} 至 {history.ts.iloc[-1]}")
-                st.write(f"缺失小时数（按时间戳间隔估算）：{missing}｜重复时间戳：{duplicates}｜目标：8760条")
-                if len(history) < 8760 or missing:
-                    st.warning("历史覆盖未达到完整一年或存在缺口，暂不能据此进行全年宏观事件小时级回测。")
-                else:
-                    st.success("已取得约一年连续小时K线，可进入事件时间匹配阶段；尚未验证宏观事件数据。")
-            except Exception as exc:
-                st.warning(f"历史数据扩充未完成：{exc}。原有行情分析不受影响。")
-        st.info("待接入：CPI公布时间、非农公布时间、FOMC决议时间及各自历史实际值。没有经过官方核对的事件，不计入宏观事件回测。")
-        st.caption("历史事件数据需与BTC/ETH价格历史重叠，才能计算事件后1小时、4小时和24小时波动；暂不据此调整参考区间。")
-        st.subheader("🗓️ 官方宏观事件与历史小时K线匹配（首批）")
-        st.caption("以下为待逐条复核的2026年美国宏观事件日程；公布时间按纽约时区处理。回报采用公布前最后一根已收盘小时线与目标时间之后首根已收盘小时线，实际测量窗口最多偏离约一小时。")
-        if st.button("📊 匹配2026年CPI、非农与FOMC事件",key="match_official_macro"):
-            try:
-                history = historical_hourly(pair)
-                close_times = pd.to_datetime(history.ts,utc=True) + pd.Timedelta(hours=1)
-                prices = history.close.astype(float).to_numpy()
-                dates = {
-                    "CPI":["2026-01-13","2026-02-13","2026-03-11","2026-04-10","2026-05-12","2026-06-10","2026-07-14","2026-08-12","2026-09-11","2026-10-14"],
-                    "非农":["2026-01-09","2026-02-11","2026-03-06","2026-04-03","2026-05-08","2026-06-05","2026-07-02","2026-08-07","2026-09-04","2026-10-02"],
-                    "FOMC":["2026-01-28","2026-03-18","2026-04-29","2026-06-17","2026-07-29","2026-09-16"]}
-                results=[]
-                for kind,days in dates.items():
-                    for day in days:
-                        clock="14:00" if kind=="FOMC" else "08:30"
-                        published=pd.Timestamp(day+" "+clock,tz="America/New_York").tz_convert("UTC")
-                        before=int(close_times.searchsorted(published,side="right"))-1
-                        if before<0: continue
-                        record={"事件":kind,"官方日期":day,"发布时间(北京)":str(published.tz_convert("Asia/Shanghai")),"基准价":round(float(prices[before]),4)}
-                        for hours in (1,4,24):
-                            after=int(close_times.searchsorted(published+pd.Timedelta(hours=hours),side="left"))
-                            record[f"{hours}小时%"]=round((float(prices[after])/float(prices[before])-1)*100,3) if after<len(prices) else None
-                        if any(record[f"{hours}小时%"] is not None for hours in (1,4,24)): results.append(record)
-                if results:
-                    result_df = pd.DataFrame(results)
-                    st.dataframe(result_df,use_container_width=True,hide_index=True)
-                    st.subheader("📊 宏观事件分类波动统计（探索性）")
-                    summary=[]
-                    for category, group in result_df.groupby("事件"):
-                        for hours in (1,4,24):
-                            vals=pd.to_numeric(group[f"{hours}小时%"],errors="coerce").dropna()
-                            summary.append({"事件类型":category,"观察窗口":f"{hours}小时","有效样本":len(vals),"平均涨跌%":round(float(vals.mean()),3) if len(vals) else None,"绝对波动中位数%":round(float(vals.abs().median()),3) if len(vals) else None,"绝对波动75分位%":round(float(vals.abs().quantile(0.75)),3) if len(vals) else None})
-                    st.dataframe(pd.DataFrame(summary),use_container_width=True,hide_index=True)
-                    st.warning("各类事件样本偏少；日期与实际公布时刻仍需逐条复核。当前统计不用于调整交易信号、价格区间或仓位。")
-                    st.caption(f"匹配到 {len(results)} 条候选宏观事件；仅计算事件窗口价格变化，不代表事件造成变化，也不代表方向预测。")
-                else: st.info("当前历史K线范围与候选事件无可计算的交集。")
-            except Exception as exc: st.warning(f"官方事件历史匹配失败：{exc}")
-        st.caption("核对入口：美国劳工统计局 CPI、就业报告发布日程及美联储 FOMC 日历。当前日期列表尚未逐条完成来源核验，尤其非农可能出现改期；不包含预期差和政策结果。")
-        st.subheader("🧪 样本外历史区间回测（独立于宏观事件）")
-        st.caption("使用一年小时线的前70%训练、后30%测试；每个预测点只使用此前已收盘数据，计算历史75分位绝对涨跌幅形成对称区间。此测试不是当前ATR综合区间的准确率。")
-        if st.button("▶️ 运行样本外区间回测",key="run_oos_backtest"):
-            try:
-                history = historical_hourly(pair)
-                prices = history.close.astype(float).reset_index(drop=True)
-                cutoff = int(len(prices)*0.7)
-                records=[]
-                for horizon in (1,4,24):
-                    hits=[]
-                    widths=[]
-                    for idx in range(max(cutoff,720+horizon),len(prices)-horizon):
-                        past = (prices.shift(-horizon)/prices-1).abs().iloc[idx-720-horizon:idx-horizon].dropna()
-                        if len(past)<600: continue
-                        width = float(past.quantile(0.75))
-                        realized = abs(float(prices.iloc[idx+horizon]/prices.iloc[idx]-1))
-                        hits.append(realized<=width)
-                        widths.append(width*100)
-                    if hits:
-                        records.append({"周期":f"{horizon}小时","测试预测点":len(hits),"区间命中率%":round(np.mean(hits)*100,2),"平均半宽%":round(np.mean(widths),2),"训练结束":str(history.ts.iloc[cutoff])})
-                if records:
-                    st.dataframe(pd.DataFrame(records),use_container_width=True,hide_index=True)
-                    st.caption("测试点的未来窗口互相重叠，命中率不是独立事件概率；75%是训练数据的历史分位数，并非保证达到的准确率。")
-                else: st.warning("可用历史不足，无法完成样本外回测。")
-            except Exception as exc: st.warning(f"样本外回测暂不可用：{exc}")
-        st.subheader("⚖️ 历史分位区间 vs ATR代理区间：同点对照")
-        st.caption("在相同的测试预测点比较历史75分位区间和ATR代理区间。ATR代理只使用历史小时K线与过去24小时变化；不是线上综合区间的完整复刻（未包含资金费率、日线波动等）。")
-        if st.button("▶️ 运行两模型同点对照",key="compare_interval_models"):
-            try:
-                h = historical_hourly(pair)
-                p = h.close.astype(float).reset_index(drop=True)
-                highs = pd.to_numeric(h.high,errors="coerce").reset_index(drop=True)
-                lows = pd.to_numeric(h.low,errors="coerce").reset_index(drop=True)
-                tr = pd.concat([(highs-lows),(highs-p.shift()).abs(),(lows-p.shift()).abs()],axis=1).max(axis=1)
-                atr = tr.ewm(alpha=1/14,adjust=False).mean()
-                cutoff = int(len(p)*0.7)
-                rows=[]
-                for horizon in (1,4,24):
-                    hits_hist=[];hits_atr=[];width_hist=[];width_atr=[]
-                    forward = (p.shift(-horizon)/p-1).abs()
-                    for idx in range(max(cutoff,744+horizon),len(p)-horizon):
-                        past = forward.iloc[idx-720-horizon:idx-horizon].dropna()
-                        if len(past)<600 or p.iloc[idx]<=0: continue
-                        historical_width = float(past.quantile(0.75))
-                        atr_width = max(float(atr.iloc[idx])/float(p.iloc[idx]),0.5*abs(float(p.iloc[idx]/p.iloc[idx-24]-1))*np.sqrt(horizon/24))
-                        actual=float(forward.iloc[idx])
-                        if not np.isfinite(atr_width) or not np.isfinite(actual):continue
-                        hits_hist.append(actual<=historical_width);hits_atr.append(actual<=atr_width)
-                        width_hist.append(historical_width*100);width_atr.append(atr_width*100)
-                    if hits_hist:
-                        for model,hits,widths in (("历史75分位",hits_hist,width_hist),("ATR代理",hits_atr,width_atr)):
-                            rows.append({"周期":f"{horizon}小时","模型":model,"同组测试点":len(hits),"命中率%":round(float(np.mean(hits)*100),2),"平均半宽%":round(float(np.mean(widths)),3)})
-                if rows: st.dataframe(pd.DataFrame(rows),use_container_width=True,hide_index=True)
-                else: st.info("数据不足，无法进行同点对照。")
-                st.caption("未来窗口互相重叠，结果不能作为独立胜率；两模型均未计入手续费、交易方向及新闻影响。")
-            except Exception as exc: st.warning(f"同点对照暂不可用：{exc}")
-        st.subheader("📊 1小时 / 4小时：上涨、下跌、震荡分类回测")
-        st.caption("行情分类仅用预测点之前24小时的已收盘价格：涨幅超过1%为上涨，跌幅超过1%为下跌，其余为震荡；阈值是研究假设，并非最佳参数。")
-        if st.button("▶️ 运行分类样本外回测",key="run_regime_oos"):
-            try:
-                rh=historical_hourly(pair)
-                rp=rh.close.astype(float).reset_index(drop=True)
-                split=int(len(rp)*0.7)
-                results=[]
-                for hh in (1,4):
-                    realized=(rp.shift(-hh)/rp-1).abs()
-                    widths=realized.shift(hh).rolling(720,min_periods=600).quantile(0.75)
-                    prior24=rp/rp.shift(24)-1
-                    regimes=np.where(prior24>0.01,"上涨",np.where(prior24< -0.01,"下跌","震荡"))
-                    test=pd.DataFrame({"width":widths,"actual":realized,"regime":regimes}).iloc[split:len(rp)-hh].dropna()
-                    for rg in ("上涨","下跌","震荡"):
-                        sub=test[test.regime==rg]
-                        if len(sub)==0:continue
-                        results.append({"周期":f"{hh}小时","行情":rg,"预测点":len(sub),"区间命中率%":round(float((sub.actual<=sub.width).mean()*100),2),"平均半宽%":round(float(sub.width.mean()*100),3)})
-                if results:st.dataframe(pd.DataFrame(results),use_container_width=True,hide_index=True)
-                else:st.warning("可用样本不足。")
-                st.caption("每个预测点只使用当时已知历史数据计算区间；未来1小时/4小时结果用于事后核验。预测窗口存在重叠，分类命中率不是独立交易胜率。")
-            except Exception as exc:st.warning(f"分类回测暂不可用：{exc}")
-        st.caption("官方时间核对入口：BLS发布日程 https://www.bls.gov/schedule/news_release/ ｜ FOMC https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm 。候选事件发布时间尚未逐条验证，不参与本项回测。")
-        st.subheader("📉 事件发布后的历史K线反应")
-        st.caption("按新闻源标注的发布时间匹配OKX已收盘1小时K线；仅描述价格变化，不能证明事件导致涨跌。")
-        try:
-            event_candles = candles(pair, "1H")
-            event_times = pd.to_datetime(event_candles.ts, utc=True)
-            event_closes = event_candles.close.astype(float).to_numpy()
-            event_rows = []
-            for source_name, source_url in (("美联储公告", "https://www.federalreserve.gov/feeds/press_monetary.xml"), ("币圈新闻", "https://www.coindesk.com/arc/outboundfeeds/rss/")):
+        with st.expander("🔬 高级研究：宏观事件、历史样本与回测（按需展开）", expanded=False):
+            st.subheader("🗞️ 新闻与宏观事件观察")
+            st.caption("事件信息独立于技术信号；尚未将新闻情绪或CPI/非农预期差转换成方向分数。")
+            for label, url in (("美联储", "https://www.federalreserve.gov/feeds/press_monetary.xml"), ("币圈", "https://www.coindesk.com/arc/outboundfeeds/rss/")):
                 try:
-                    items = feed(source_url)
+                    entries = feed(url)
+                    if not entries:
+                        st.warning(f"{label}事件源暂无可用条目。")
+                    for item in entries[:3]:
+                        title = item.get("title", "事件公告")
+                        link = item.get("link", "")
+                        published = item.get("published", "发布时间未知")
+                        st.write(f"{label}｜{published}｜{title}")
+                        if link: st.markdown(f"[查看原文]({link})")
                 except Exception:
-                    continue
-                for item in items[:8]:
-                    stamp = pd.to_datetime(item.get("published", ""), utc=True, errors="coerce")
-                    if pd.isna(stamp): continue
-                    start_idx = int(event_times.searchsorted(stamp, side="right"))
-                    if start_idx < 1 or start_idx + 24 >= len(event_closes): continue
-                    if abs((event_times.iloc[start_idx] - stamp).total_seconds()) > 7200: continue
-                    baseline = event_closes[start_idx-1]
-                    if baseline <= 0: continue
-                    changes = [(event_closes[start_idx+h-1] / baseline - 1) * 100 for h in (1,4,24)]
-                    event_rows.append({"事件源":source_name, "发布时间(北京时间)":stamp.tz_convert("Asia/Shanghai").strftime("%m-%d %H:%M"), "标题":str(item.get("title",""))[:42], "1小时%":round(changes[0],2), "4小时%":round(changes[1],2), "24小时%":round(changes[2],2)})
+                    st.warning(f"{label}事件源读取失败，不能据此判断没有风险。")
+            st.caption("官方数据核对：CPI https://www.bls.gov/cpi/ ｜ 非农 https://www.bls.gov/news.release/empsit.toc.htm ｜ FOMC https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm")
+            st.info("事件对历史K线的量化归因与回测尚未完成；新闻公告目前不会改变价格区间或开仓参考。")
+            st.subheader("🗃️ 历史宏观事件样本库（建设中）")
+            st.caption("按事件类型、官方发布时间、数据来源及K线覆盖范围分开核验。尚未建立完整一年的CPI、非农、FOMC历史事件库。")
+            coverage = []
+            for label, tf in (("小时行情","1H"),("日线行情","1D")):
+                try:
+                    hist = candles(pair,tf)
+                    coverage.append({"数据":label,"已收盘K线":len(hist),"起始时间":str(hist.ts.iloc[0]),"结束时间":str(hist.ts.iloc[-1])})
+                except Exception:
+                    coverage.append({"数据":label,"已收盘K线":0,"起始时间":"不可用","结束时间":"不可用"})
+            st.dataframe(pd.DataFrame(coverage),use_container_width=True,hide_index=True)
+            if st.button("🔎 拉取一年小时K线并检查完整性", key="historical_check"):
+                try:
+                    with st.spinner("正在分页获取历史小时线，可能需要一些时间……"):
+                        history = historical_hourly(pair)
+                    gaps = history.ts.diff().dropna().dt.total_seconds().div(3600)
+                    missing = int((gaps[gaps > 1.01].round().astype(int)-1).clip(lower=0).sum())
+                    duplicates = int(history.ts.duplicated().sum())
+                    st.write(f"交易对：{pair}｜已收盘小时K线：{len(history)} 条｜时间范围：{history.ts.iloc[0]} 至 {history.ts.iloc[-1]}")
+                    st.write(f"缺失小时数（按时间戳间隔估算）：{missing}｜重复时间戳：{duplicates}｜目标：8760条")
+                    if len(history) < 8760 or missing:
+                        st.warning("历史覆盖未达到完整一年或存在缺口，暂不能据此进行全年宏观事件小时级回测。")
+                    else:
+                        st.success("已取得约一年连续小时K线，可进入事件时间匹配阶段；尚未验证宏观事件数据。")
+                except Exception as exc:
+                    st.warning(f"历史数据扩充未完成：{exc}。原有行情分析不受影响。")
+            st.info("待接入：CPI公布时间、非农公布时间、FOMC决议时间及各自历史实际值。没有经过官方核对的事件，不计入宏观事件回测。")
+            st.caption("历史事件数据需与BTC/ETH价格历史重叠，才能计算事件后1小时、4小时和24小时波动；暂不据此调整参考区间。")
+            st.subheader("🗓️ 官方宏观事件与历史小时K线匹配（首批）")
+            st.caption("以下为待逐条复核的2026年美国宏观事件日程；公布时间按纽约时区处理。回报采用公布前最后一根已收盘小时线与目标时间之后首根已收盘小时线，实际测量窗口最多偏离约一小时。")
+            if st.button("📊 匹配2026年CPI、非农与FOMC事件",key="match_official_macro"):
+                try:
+                    history = historical_hourly(pair)
+                    close_times = pd.to_datetime(history.ts,utc=True) + pd.Timedelta(hours=1)
+                    prices = history.close.astype(float).to_numpy()
+                    dates = {
+                        "CPI":["2026-01-13","2026-02-13","2026-03-11","2026-04-10","2026-05-12","2026-06-10","2026-07-14","2026-08-12","2026-09-11","2026-10-14"],
+                        "非农":["2026-01-09","2026-02-11","2026-03-06","2026-04-03","2026-05-08","2026-06-05","2026-07-02","2026-08-07","2026-09-04","2026-10-02"],
+                        "FOMC":["2026-01-28","2026-03-18","2026-04-29","2026-06-17","2026-07-29","2026-09-16"]}
+                    results=[]
+                    for kind,days in dates.items():
+                        for day in days:
+                            clock="14:00" if kind=="FOMC" else "08:30"
+                            published=pd.Timestamp(day+" "+clock,tz="America/New_York").tz_convert("UTC")
+                            before=int(close_times.searchsorted(published,side="right"))-1
+                            if before<0: continue
+                            record={"事件":kind,"官方日期":day,"发布时间(北京)":str(published.tz_convert("Asia/Shanghai")),"基准价":round(float(prices[before]),4)}
+                            for hours in (1,4,24):
+                                after=int(close_times.searchsorted(published+pd.Timedelta(hours=hours),side="left"))
+                                record[f"{hours}小时%"]=round((float(prices[after])/float(prices[before])-1)*100,3) if after<len(prices) else None
+                            if any(record[f"{hours}小时%"] is not None for hours in (1,4,24)): results.append(record)
+                    if results:
+                        result_df = pd.DataFrame(results)
+                        st.dataframe(result_df,use_container_width=True,hide_index=True)
+                        st.subheader("📊 宏观事件分类波动统计（探索性）")
+                        summary=[]
+                        for category, group in result_df.groupby("事件"):
+                            for hours in (1,4,24):
+                                vals=pd.to_numeric(group[f"{hours}小时%"],errors="coerce").dropna()
+                                summary.append({"事件类型":category,"观察窗口":f"{hours}小时","有效样本":len(vals),"平均涨跌%":round(float(vals.mean()),3) if len(vals) else None,"绝对波动中位数%":round(float(vals.abs().median()),3) if len(vals) else None,"绝对波动75分位%":round(float(vals.abs().quantile(0.75)),3) if len(vals) else None})
+                        st.dataframe(pd.DataFrame(summary),use_container_width=True,hide_index=True)
+                        st.warning("各类事件样本偏少；日期与实际公布时刻仍需逐条复核。当前统计不用于调整交易信号、价格区间或仓位。")
+                        st.caption(f"匹配到 {len(results)} 条候选宏观事件；仅计算事件窗口价格变化，不代表事件造成变化，也不代表方向预测。")
+                    else: st.info("当前历史K线范围与候选事件无可计算的交集。")
+                except Exception as exc: st.warning(f"官方事件历史匹配失败：{exc}")
+            st.caption("核对入口：美国劳工统计局 CPI、就业报告发布日程及美联储 FOMC 日历。当前日期列表尚未逐条完成来源核验，尤其非农可能出现改期；不包含预期差和政策结果。")
+            st.subheader("🧪 样本外历史区间回测（独立于宏观事件）")
+            st.caption("使用一年小时线的前70%训练、后30%测试；每个预测点只使用此前已收盘数据，计算历史75分位绝对涨跌幅形成对称区间。此测试不是当前ATR综合区间的准确率。")
+            if st.button("▶️ 运行样本外区间回测",key="run_oos_backtest"):
+                try:
+                    history = historical_hourly(pair)
+                    prices = history.close.astype(float).reset_index(drop=True)
+                    cutoff = int(len(prices)*0.7)
+                    records=[]
+                    for horizon in (1,4,24):
+                        hits=[]
+                        widths=[]
+                        for idx in range(max(cutoff,720+horizon),len(prices)-horizon):
+                            past = (prices.shift(-horizon)/prices-1).abs().iloc[idx-720-horizon:idx-horizon].dropna()
+                            if len(past)<600: continue
+                            width = float(past.quantile(0.75))
+                            realized = abs(float(prices.iloc[idx+horizon]/prices.iloc[idx]-1))
+                            hits.append(realized<=width)
+                            widths.append(width*100)
+                        if hits:
+                            records.append({"周期":f"{horizon}小时","测试预测点":len(hits),"区间命中率%":round(np.mean(hits)*100,2),"平均半宽%":round(np.mean(widths),2),"训练结束":str(history.ts.iloc[cutoff])})
+                    if records:
+                        st.dataframe(pd.DataFrame(records),use_container_width=True,hide_index=True)
+                        st.caption("测试点的未来窗口互相重叠，命中率不是独立事件概率；75%是训练数据的历史分位数，并非保证达到的准确率。")
+                    else: st.warning("可用历史不足，无法完成样本外回测。")
+                except Exception as exc: st.warning(f"样本外回测暂不可用：{exc}")
+            st.subheader("⚖️ 历史分位区间 vs ATR代理区间：同点对照")
+            st.caption("在相同的测试预测点比较历史75分位区间和ATR代理区间。ATR代理只使用历史小时K线与过去24小时变化；不是线上综合区间的完整复刻（未包含资金费率、日线波动等）。")
+            if st.button("▶️ 运行两模型同点对照",key="compare_interval_models"):
+                try:
+                    h = historical_hourly(pair)
+                    p = h.close.astype(float).reset_index(drop=True)
+                    highs = pd.to_numeric(h.high,errors="coerce").reset_index(drop=True)
+                    lows = pd.to_numeric(h.low,errors="coerce").reset_index(drop=True)
+                    tr = pd.concat([(highs-lows),(highs-p.shift()).abs(),(lows-p.shift()).abs()],axis=1).max(axis=1)
+                    atr = tr.ewm(alpha=1/14,adjust=False).mean()
+                    cutoff = int(len(p)*0.7)
+                    rows=[]
+                    for horizon in (1,4,24):
+                        hits_hist=[];hits_atr=[];width_hist=[];width_atr=[]
+                        forward = (p.shift(-horizon)/p-1).abs()
+                        for idx in range(max(cutoff,744+horizon),len(p)-horizon):
+                            past = forward.iloc[idx-720-horizon:idx-horizon].dropna()
+                            if len(past)<600 or p.iloc[idx]<=0: continue
+                            historical_width = float(past.quantile(0.75))
+                            atr_width = max(float(atr.iloc[idx])/float(p.iloc[idx]),0.5*abs(float(p.iloc[idx]/p.iloc[idx-24]-1))*np.sqrt(horizon/24))
+                            actual=float(forward.iloc[idx])
+                            if not np.isfinite(atr_width) or not np.isfinite(actual):continue
+                            hits_hist.append(actual<=historical_width);hits_atr.append(actual<=atr_width)
+                            width_hist.append(historical_width*100);width_atr.append(atr_width*100)
+                        if hits_hist:
+                            for model,hits,widths in (("历史75分位",hits_hist,width_hist),("ATR代理",hits_atr,width_atr)):
+                                rows.append({"周期":f"{horizon}小时","模型":model,"同组测试点":len(hits),"命中率%":round(float(np.mean(hits)*100),2),"平均半宽%":round(float(np.mean(widths)),3)})
+                    if rows: st.dataframe(pd.DataFrame(rows),use_container_width=True,hide_index=True)
+                    else: st.info("数据不足，无法进行同点对照。")
+                    st.caption("未来窗口互相重叠，结果不能作为独立胜率；两模型均未计入手续费、交易方向及新闻影响。")
+                except Exception as exc: st.warning(f"同点对照暂不可用：{exc}")
+            st.subheader("📊 1小时 / 4小时：上涨、下跌、震荡分类回测")
+            st.caption("行情分类仅用预测点之前24小时的已收盘价格：涨幅超过1%为上涨，跌幅超过1%为下跌，其余为震荡；阈值是研究假设，并非最佳参数。")
+            if st.button("▶️ 运行分类样本外回测",key="run_regime_oos"):
+                try:
+                    rh=historical_hourly(pair)
+                    rp=rh.close.astype(float).reset_index(drop=True)
+                    split=int(len(rp)*0.7)
+                    results=[]
+                    for hh in (1,4):
+                        realized=(rp.shift(-hh)/rp-1).abs()
+                        widths=realized.shift(hh).rolling(720,min_periods=600).quantile(0.75)
+                        prior24=rp/rp.shift(24)-1
+                        regimes=np.where(prior24>0.01,"上涨",np.where(prior24< -0.01,"下跌","震荡"))
+                        test=pd.DataFrame({"width":widths,"actual":realized,"regime":regimes}).iloc[split:len(rp)-hh].dropna()
+                        for rg in ("上涨","下跌","震荡"):
+                            sub=test[test.regime==rg]
+                            if len(sub)==0:continue
+                            results.append({"周期":f"{hh}小时","行情":rg,"预测点":len(sub),"区间命中率%":round(float((sub.actual<=sub.width).mean()*100),2),"平均半宽%":round(float(sub.width.mean()*100),3)})
+                    if results:st.dataframe(pd.DataFrame(results),use_container_width=True,hide_index=True)
+                    else:st.warning("可用样本不足。")
+                    st.caption("每个预测点只使用当时已知历史数据计算区间；未来1小时/4小时结果用于事后核验。预测窗口存在重叠，分类命中率不是独立交易胜率。")
+                except Exception as exc:st.warning(f"分类回测暂不可用：{exc}")
+            st.caption("官方时间核对入口：BLS发布日程 https://www.bls.gov/schedule/news_release/ ｜ FOMC https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm 。候选事件发布时间尚未逐条验证，不参与本项回测。")
+            st.subheader("📉 事件发布后的历史K线反应")
+            st.caption("按新闻源标注的发布时间匹配OKX已收盘1小时K线；仅描述价格变化，不能证明事件导致涨跌。")
+            try:
+                event_candles = candles(pair, "1H")
+                event_times = pd.to_datetime(event_candles.ts, utc=True)
+                event_closes = event_candles.close.astype(float).to_numpy()
+                event_rows = []
+                for source_name, source_url in (("美联储公告", "https://www.federalreserve.gov/feeds/press_monetary.xml"), ("币圈新闻", "https://www.coindesk.com/arc/outboundfeeds/rss/")):
+                    try:
+                        items = feed(source_url)
+                    except Exception:
+                        continue
+                    for item in items[:8]:
+                        stamp = pd.to_datetime(item.get("published", ""), utc=True, errors="coerce")
+                        if pd.isna(stamp): continue
+                        start_idx = int(event_times.searchsorted(stamp, side="right"))
+                        if start_idx < 1 or start_idx + 24 >= len(event_closes): continue
+                        if abs((event_times.iloc[start_idx] - stamp).total_seconds()) > 7200: continue
+                        baseline = event_closes[start_idx-1]
+                        if baseline <= 0: continue
+                        changes = [(event_closes[start_idx+h-1] / baseline - 1) * 100 for h in (1,4,24)]
+                        event_rows.append({"事件源":source_name, "发布时间(北京时间)":stamp.tz_convert("Asia/Shanghai").strftime("%m-%d %H:%M"), "标题":str(item.get("title",""))[:42], "1小时%":round(changes[0],2), "4小时%":round(changes[1],2), "24小时%":round(changes[2],2)})
+                if event_rows:
+                    st.dataframe(pd.DataFrame(event_rows).head(12), use_container_width=True, hide_index=True)
+                    st.caption("起点为事件发布时间之前最近一根已收盘1小时K线的收盘价；新闻发布不一定等于经济数据实际公布时刻。")
+                else:
+                    st.info("当前新闻源与可用K线时间没有足够重合，暂不展示事件回报，避免伪造历史结果。")
+            except Exception as exc:
+                st.warning(f"事件历史反应暂不可用：{exc}")
+            st.subheader("📏 历史普通波动基准")
+            try:
+                prices = event_candles.close.astype(float)
+                for name, periods in (("1小时",1),("4小时",4),("24小时",24)):
+                    moves = (prices / prices.shift(periods) - 1).abs().dropna() * 100
+                    if len(moves) >= 200:
+                        st.write(f"{name}：普通历史窗口 {len(moves)} 个，绝对波动中位数 {moves.median():.2f}%，75分位 {moves.quantile(0.75):.2f}%")
+                    else:
+                        st.info(f"{name}普通历史窗口不足200个，暂不展示基准。")
+            except Exception as exc:
+                st.info(f"历史波动基准暂不可用：{exc}")
+            st.caption("普通历史窗口可能包含新闻事件，且窗口互相重叠；本项只供与上方事件样本观察对比，不是独立回测或预测概率。")
             if event_rows:
-                st.dataframe(pd.DataFrame(event_rows).head(12), use_container_width=True, hide_index=True)
-                st.caption("起点为事件发布时间之前最近一根已收盘1小时K线的收盘价；新闻发布不一定等于经济数据实际公布时刻。")
-            else:
-                st.info("当前新闻源与可用K线时间没有足够重合，暂不展示事件回报，避免伪造历史结果。")
-        except Exception as exc:
-            st.warning(f"事件历史反应暂不可用：{exc}")
-        st.subheader("📏 历史普通波动基准")
-        try:
-            prices = event_candles.close.astype(float)
-            for name, periods in (("1小时",1),("4小时",4),("24小时",24)):
-                moves = (prices / prices.shift(periods) - 1).abs().dropna() * 100
-                if len(moves) >= 200:
-                    st.write(f"{name}：普通历史窗口 {len(moves)} 个，绝对波动中位数 {moves.median():.2f}%，75分位 {moves.quantile(0.75):.2f}%")
-                else:
-                    st.info(f"{name}普通历史窗口不足200个，暂不展示基准。")
-        except Exception as exc:
-            st.info(f"历史波动基准暂不可用：{exc}")
-        st.caption("普通历史窗口可能包含新闻事件，且窗口互相重叠；本项只供与上方事件样本观察对比，不是独立回测或预测概率。")
-        if event_rows:
-            st.subheader("🧪 事件样本波动统计（探索性）")
-            event_stats = pd.DataFrame(event_rows)
-            for horizon in ("1小时%", "4小时%", "24小时%"):
-                samples = pd.to_numeric(event_stats[horizon], errors="coerce").dropna().abs()
-                if len(samples) >= 5:
-                    st.write(f"{horizon}｜样本 {len(samples)} 条｜绝对涨跌中位数 {samples.median():.2f}%｜75分位 {samples.quantile(0.75):.2f}%")
-                else:
-                    st.write(f"{horizon}｜有效样本仅 {len(samples)} 条，不足以校准波动区间。")
-            st.caption("新闻样本并非随机抽样，可能有重复报道和选择偏差；仅做探索性统计，暂不据此放大交易区间或输出方向概率。")
-        st.caption("CPI、非农的历史实际公布时间及市场预期差尚未结构化接入，因此不参与本次事件统计，也不自动改变交易方向。")
+                st.subheader("🧪 事件样本波动统计（探索性）")
+                event_stats = pd.DataFrame(event_rows)
+                for horizon in ("1小时%", "4小时%", "24小时%"):
+                    samples = pd.to_numeric(event_stats[horizon], errors="coerce").dropna().abs()
+                    if len(samples) >= 5:
+                        st.write(f"{horizon}｜样本 {len(samples)} 条｜绝对涨跌中位数 {samples.median():.2f}%｜75分位 {samples.quantile(0.75):.2f}%")
+                    else:
+                        st.write(f"{horizon}｜有效样本仅 {len(samples)} 条，不足以校准波动区间。")
+                st.caption("新闻样本并非随机抽样，可能有重复报道和选择偏差；仅做探索性统计，暂不据此放大交易区间或输出方向概率。")
+            st.caption("CPI、非农的历史实际公布时间及市场预期差尚未结构化接入，因此不参与本次事件统计，也不自动改变交易方向。")
         q1,q2,q3,q4=st.columns(4)
         q1.metric("RSI 14",fmt(row.rsi,1))
         q2.metric("ATR 14",fmt(row.atr))
         q3.metric("量比",fmt(row.vol/row.vol_ma if row.vol_ma>0 else None))
         q4.metric("未平仓量（张）",fmt(oi.get("oi"),0))
-        fig=go.Figure()
-        fig.add_trace(go.Candlestick(x=d.ts,open=d.open,high=d.high,low=d.low,close=d.close,name="K线"))
-        fig.add_trace(go.Scatter(x=d.ts,y=d.ema20,name="EMA20"))
-        fig.add_trace(go.Scatter(x=d.ts,y=d.ema50,name="EMA50"))
-        fig.update_layout(height=440,xaxis_rangeslider_visible=False,margin=dict(l=5,r=5,t=20,b=5))
-        st.plotly_chart(fig,use_container_width=True)
+        with st.expander("📉 K线图与均线（按需展开）", expanded=False):
+            fig=go.Figure()
+            fig.add_trace(go.Candlestick(x=d.ts,open=d.open,high=d.high,low=d.low,close=d.close,name="K线"))
+            fig.add_trace(go.Scatter(x=d.ts,y=d.ema20,name="EMA20"))
+            fig.add_trace(go.Scatter(x=d.ts,y=d.ema50,name="EMA50"))
+            fig.update_layout(height=440,xaxis_rangeslider_visible=False,margin=dict(l=5,r=5,t=20,b=5))
+            st.plotly_chart(fig,use_container_width=True)
         st.subheader("🎯 分时段参考区间（1小时 / 4小时 / 1天）")
         st.caption("结合一年日线历史波动、24小时波动、资金费率和多周期趋势；新闻/宏观仅标注事件风险，未接入AI新闻语义模型。")
         if last is None or age is None or age > 120:
