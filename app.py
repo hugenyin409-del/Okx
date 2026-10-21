@@ -207,6 +207,18 @@ with tab1:
                 st.info("当前新闻源与可用K线时间没有足够重合，暂不展示事件回报，避免伪造历史结果。")
         except Exception as exc:
             st.warning(f"事件历史反应暂不可用：{exc}")
+        st.subheader("📏 历史普通波动基准")
+        try:
+            prices = event_candles.close.astype(float)
+            for name, periods in (("1小时",1),("4小时",4),("24小时",24)):
+                moves = (prices / prices.shift(periods) - 1).abs().dropna() * 100
+                if len(moves) >= 200:
+                    st.write(f"{name}：普通历史窗口 {len(moves)} 个，绝对波动中位数 {moves.median():.2f}%，75分位 {moves.quantile(0.75):.2f}%")
+                else:
+                    st.info(f"{name}普通历史窗口不足200个，暂不展示基准。")
+        except Exception as exc:
+            st.info(f"历史波动基准暂不可用：{exc}")
+        st.caption("普通历史窗口可能包含新闻事件，且窗口互相重叠；本项只供与上方事件样本观察对比，不是独立回测或预测概率。")
         if event_rows:
             st.subheader("🧪 事件样本波动统计（探索性）")
             event_stats = pd.DataFrame(event_rows)
