@@ -7,7 +7,7 @@ import feedparser
 from datetime import datetime, timezone
 
 st.set_page_config(page_title="OKX BTC ETH 合约研究台 Pro", page_icon="📈", layout="wide")
-st.title("📈 OKX BTC / ETH 合约研究台 · 增强版")
+st.title("📈 OKX BTC / ETH 合约研究台 · 稳定增强版 v3")
 st.caption("免费公开数据 · 最新成交与标记价格 · 多周期技术分析 · 合约风险模拟 · 新闻与宏观 · 不自动下单")
 
 BASE = "https://www.okx.com"
@@ -44,14 +44,18 @@ def candles(inst, bar):
 
 @st.cache_data(ttl=15, show_spinner=False)
 def market(inst):
-    ticker = okx("/api/v5/market/ticker", {"instId":inst})
-    mark = okx("/api/v5/public/mark-price", {"instType":"SWAP","instId":inst})
-    funding = okx("/api/v5/public/funding-rate", {"instId":inst})
-    oi = okx("/api/v5/public/open-interest", {"instType":"SWAP","instId":inst})
-    spec = okx("/api/v5/public/instruments", {"instType":"SWAP","instId":inst})
-    return {"ticker":ticker[0] if ticker else {}, "mark":mark[0] if mark else {},
-            "funding":funding[0] if funding else {}, "oi":oi[0] if oi else {},
-            "spec":spec[0] if spec else {}}
+    def safe(path, params):
+        try:
+            result = okx(path, params)
+            return result[0] if result else {}
+        except (requests.RequestException, RuntimeError, ValueError):
+            return {}
+    ticker = safe("/api/v5/market/ticker", {"instId":inst})
+    mark = safe("/api/v5/public/mark-price", {"instType":"SWAP","instId":inst})
+    funding = safe("/api/v5/public/funding-rate", {"instId":inst})
+    oi = safe("/api/v5/public/open-interest", {"instType":"SWAP","instId":inst})
+    spec = safe("/api/v5/public/instruments", {"instType":"SWAP","instId":inst})
+    return {"ticker":ticker, "mark":mark, "funding":funding, "oi":oi, "spec":spec}
 
 def indicators(df):
     d = df.copy()
@@ -109,18 +113,19 @@ with tab1:
         row = d.iloc[-1]
         m = market(pair)
         t, mark, fund, oi, spec = (m[k] for k in ["ticker","mark","funding","oi","spec"])
-        last = float(t.get("last") or row.close)
+        last = float(t["last"]) if t.get("last") else None
         ts_ms = int(t.get("ts") or 0)
         age = (datetime.now(timezone.utc).timestamp()*1000-ts_ms)/1000 if ts_ms else None
         direction_text, reason = direction(row)
         x1,x2,x3,x4 = st.columns(4)
         x1.metric("最新成交价 USDT",fmt(last))
+        if last is None: st.error("最新成交价暂不可用，不得将历史收盘价当成实时价格。")
         x2.metric("标记价格 USDT",fmt(mark.get("markPx")))
         x3.metric("资金费率",fmt(float(fund["fundingRate"])*100,4)+"%" if fund.get("fundingRate") else "暂无")
         x4.metric("技术方向",direction_text)
         if age is not None:
             st.caption("最新成交数据时间（北京时间）：" + pd.to_datetime(ts_ms,unit="ms",utc=True).tz_convert("Asia/Shanghai").strftime("%Y-%m-%d %H:%M:%S") + f" · 距现在约 {max(0,int(age))} 秒")
-            if age>120: st.warning("最新成交数据可能已过期，请刷新或检查网络")
+            if age>120: st.error("最新成交数据超过120秒，暂停方向性模拟参考。")
         st.caption("最近已收盘 K 线：" + row.ts.strftime("%Y-%m-%d %H:%M") + "（北京时间）。技术指标以已收盘 K 线计算，最新成交价单独显示。")
         st.info(f"技术判断：{direction_text}。依据：{reason}。不构成交易建议。")
         q1,q2,q3,q4=st.columns(4)
@@ -136,7 +141,7 @@ with tab1:
         st.plotly_chart(fig,use_container_width=True)
         st.subheader("🧮 模拟入场与仓位风险")
         st.caption("仅按已收盘 K 线生成方向和 ATR 参考位；入场以最近收盘价为观察参考，不等于当前可成交价格。")
-        if direction_text == "观望":
+        if direction_text == "观望" or last is None or age is None or age>120:
             st.warning("指标尚未共振，暂不生成方向性模拟仓位。")
         else:
             sign = 1 if direction_text=="偏多" else -1
@@ -197,4 +202,4 @@ with tab3:
     st.info("目前仍使用官方公告和日程链接，尚未自动抓取 CPI、非农的预期值与实际值；避免把未经核实的数据当成实时消息。")
 
 st.divider()
-st.caption("增强版 v2 · 免费公开数据 · 无 API 密钥 · 不自动交易 · 无后台推送 · 仅供研究与模拟")
+st.caption("稳定增强版 v3 · 免费公开数据 · 无 API 密钥 · 不自动交易 · 无后台推送 · 仅供研究与模拟")
