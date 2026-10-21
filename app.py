@@ -288,6 +288,37 @@ with tab1:
                     st.caption("测试点的未来窗口互相重叠，命中率不是独立事件概率；75%是训练数据的历史分位数，并非保证达到的准确率。")
                 else: st.warning("可用历史不足，无法完成样本外回测。")
             except Exception as exc: st.warning(f"样本外回测暂不可用：{exc}")
+        st.subheader("⚖️ 历史分位区间 vs ATR代理区间：同点对照")
+        st.caption("在相同的测试预测点比较历史75分位区间和ATR代理区间。ATR代理只使用历史小时K线与过去24小时变化；不是线上综合区间的完整复刻（未包含资金费率、日线波动等）。")
+        if st.button("▶️ 运行两模型同点对照",key="compare_interval_models"):
+            try:
+                h = historical_hourly(pair)
+                p = h.close.astype(float).reset_index(drop=True)
+                highs = pd.to_numeric(h.high,errors="coerce").reset_index(drop=True)
+                lows = pd.to_numeric(h.low,errors="coerce").reset_index(drop=True)
+                tr = pd.concat([(highs-lows),(highs-p.shift()).abs(),(lows-p.shift()).abs()],axis=1).max(axis=1)
+                atr = tr.ewm(alpha=1/14,adjust=False).mean()
+                cutoff = int(len(p)*0.7)
+                rows=[]
+                for horizon in (1,4,24):
+                    hits_hist=[];hits_atr=[];width_hist=[];width_atr=[]
+                    forward = (p.shift(-horizon)/p-1).abs()
+                    for idx in range(max(cutoff,744+horizon),len(p)-horizon):
+                        past = forward.iloc[idx-720-horizon:idx-horizon].dropna()
+                        if len(past)<600 or p.iloc[idx]<=0: continue
+                        historical_width = float(past.quantile(0.75))
+                        atr_width = max(float(atr.iloc[idx])/float(p.iloc[idx]),0.5*abs(float(p.iloc[idx]/p.iloc[idx-24]-1))*np.sqrt(horizon/24))
+                        actual=float(forward.iloc[idx])
+                        if not np.isfinite(atr_width) or not np.isfinite(actual):continue
+                        hits_hist.append(actual<=historical_width);hits_atr.append(actual<=atr_width)
+                        width_hist.append(historical_width*100);width_atr.append(atr_width*100)
+                    if hits_hist:
+                        for model,hits,widths in (("历史75分位",hits_hist,width_hist),("ATR代理",hits_atr,width_atr)):
+                            rows.append({"周期":f"{horizon}小时","模型":model,"同组测试点":len(hits),"命中率%":round(float(np.mean(hits)*100),2),"平均半宽%":round(float(np.mean(widths)),3)})
+                if rows: st.dataframe(pd.DataFrame(rows),use_container_width=True,hide_index=True)
+                else: st.info("数据不足，无法进行同点对照。")
+                st.caption("未来窗口互相重叠，结果不能作为独立胜率；两模型均未计入手续费、交易方向及新闻影响。")
+            except Exception as exc: st.warning(f"同点对照暂不可用：{exc}")
         st.caption("官方时间核对入口：BLS发布日程 https://www.bls.gov/schedule/news_release/ ｜ FOMC https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm 。候选事件发布时间尚未逐条验证，不参与本项回测。")
         st.subheader("📉 事件发布后的历史K线反应")
         st.caption("按新闻源标注的发布时间匹配OKX已收盘1小时K线；仅描述价格变化，不能证明事件导致涨跌。")
