@@ -200,62 +200,6 @@ def active_member(email):
         row=conn.execute("SELECT is_active FROM members WHERE email=?",(email,)).fetchone()
     return bool(row and row[0])
 
-def login_gate():
-    if st.session_state.get("member_email"):
-        if active_member(st.session_state["member_email"]):
-            return
-        st.session_state.pop("member_email",None)
-    st.markdown('<div class="nexus-kicker">NEXUS / RESEARCH TERMINAL</div>',unsafe_allow_html=True)
-    st.markdown('<div class="nexus-hero"><h1>洞察市场，始于数据。</h1><p>BTC · ETH 多周期行情研究 / 预测区间 / 风险评估 · 注册免费开放</p></div>',unsafe_allow_html=True)
-    left,mid,right=st.columns([1,1.4,1])
-    with mid:
-        tab_login,tab_register=st.tabs(["🔐 会员登录","✉️ 免费注册"])
-        with tab_login:
-            with st.form("nexus_login",clear_on_submit=False):
-                email=st.text_input("邮箱地址",key="login_email",placeholder="you@example.com")
-                password=st.text_input("登录密码",type="password",key="login_password")
-                submit=st.form_submit_button("登录研究终端",type="primary",use_container_width=True)
-                if submit:
-                    now=time.monotonic()
-                    attempts=st.session_state.get("login_attempts",[])
-                    attempts=[t for t in attempts if now-t<900]
-                    if len(attempts)>=8:
-                        st.error("尝试次数过多，请15分钟后再试。")
-                    elif verify_member(normalize_email(email),password):
-                        st.session_state["member_email"]=normalize_email(email)
-                        st.session_state["login_attempts"]=[]
-                        st.rerun()
-                    else:
-                        st.session_state["login_attempts"]=attempts+[now]
-                        st.error("邮箱或密码错误，或账号已停用。")
-        with tab_register:
-            with st.form("nexus_register",clear_on_submit=False):
-                new_email=st.text_input("注册邮箱",placeholder="you@example.com")
-                new_password=st.text_input("设置密码（至少12位）",type="password")
-                confirm=st.text_input("确认密码",type="password")
-                accepted=st.checkbox("我理解本站仅提供研究参考，不提供交易或收益保证")
-                create=st.form_submit_button("免费创建账号",type="primary",use_container_width=True)
-                if create:
-                    normalized=normalize_email(new_email)
-                    if not valid_email(normalized):
-                        st.error("请输入有效的邮箱地址。")
-                    elif len(new_password)<12 or len(new_password)>128:
-                        st.error("密码长度需要在12至128位之间。")
-                    elif new_password!=confirm:
-                        st.error("两次密码不一致。")
-                    elif not accepted:
-                        st.error("请先确认使用须知。")
-                    else:
-                        try:
-                            register_member(normalized,new_password)
-                            st.success("注册成功！请切换到会员登录。")
-                        except sqlite3.IntegrityError:
-                            st.error("该邮箱已注册，请直接登录。")
-                        except Exception:
-                            st.error("注册暂不可用，请稍后再试。")
-        st.caption("当前为免费注册测试版：尚未发送邮箱验证邮件，也没有找回密码功能。正式对外开放前需要持久化数据库、邮箱验证和完善的安全防护。")
-    st.stop()
-
 # Public beta: membership login and registration are temporarily disabled.
 with st.sidebar:
     st.markdown('<div class="nexus-brand">◈ NEXUS TERMINAL</div>', unsafe_allow_html=True)
