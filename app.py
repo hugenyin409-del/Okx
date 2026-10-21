@@ -42,6 +42,10 @@ div.stButton > button,div.stFormSubmitButton > button {border-radius:11px;}
 .nexus-hero p {color:#a8bbd5;margin:11px 0 0;font-size:14px;}
 .nexus-brand {font-size:14px;font-weight:800;letter-spacing:.22em;color:#8bd7ff;}
 .nexus-small {color:#8299b8;font-size:12px;}
+.nexus-ticker {overflow:hidden;white-space:nowrap;border:1px solid rgba(71,166,235,.28);background:rgba(11,35,59,.86);border-radius:12px;padding:10px 0;margin:0 0 16px;}
+.nexus-ticker span {display:inline-block;padding-left:100%;animation:nexus-marquee 24s linear infinite;color:#b9e7ff;font-size:13px;font-weight:600;}
+@keyframes nexus-marquee {from{transform:translateX(0)}to{transform:translateX(-100%)}}
+@media(prefers-reduced-motion:reduce){.nexus-ticker span{animation:none;padding-left:12px;white-space:normal}}
 </style>
 """,unsafe_allow_html=True)
 
@@ -55,6 +59,14 @@ def auth_connection():
     conn.execute("""CREATE TABLE IF NOT EXISTS members (
         email TEXT PRIMARY KEY, salt TEXT NOT NULL, password_hash TEXT NOT NULL,
         created_at TEXT NOT NULL, is_active INTEGER NOT NULL DEFAULT 1
+    )""")
+    conn.execute("""CREATE TABLE IF NOT EXISTS member_feedback (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        email TEXT NOT NULL,
+        period TEXT NOT NULL,
+        rating TEXT NOT NULL,
+        comment TEXT NOT NULL,
+        created_at TEXT NOT NULL
     )""")
     conn.commit()
     return conn
@@ -172,12 +184,22 @@ with st.sidebar:
         st.write("登录邮箱：", st.session_state["member_email"])
         st.caption("当前为测试版账号系统，邮箱验证、密码找回及付费会员尚未开放。")
     st.divider()
+    st.markdown("##### 🖥️ 系统运行状态")
+    st.success("● 页面服务：运行中")
+    try:
+        with auth_connection() as status_db:
+            status_db.execute("SELECT 1").fetchone()
+        st.success("● 会员数据库：连接正常")
+    except Exception:
+        st.warning("● 会员数据库：连接异常")
+    st.caption("行情接口状态请以主页面实际加载结果为准；此处不代表交易所接口已检测。")
     st.caption("NEXUS RESEARCH · BETA")
     st.caption("仅供研究与风险参考，不提供投资建议，不自动交易。")
     if st.button("↪ 退出登录", key="nexus_logout", use_container_width=True):
         st.session_state.pop("member_email", None)
         st.rerun()
 
+st.markdown('<div class="nexus-ticker"><span>📢 NEXUS 平台内测期间免费开放　｜　预测区间仅供研究参考，不保证准确率或交易收益　｜　欢迎在页面底部反馈预测体验与改进建议　｜　感谢参与内测</span></div>',unsafe_allow_html=True)
 st.markdown('<div class="nexus-kicker">NEXUS / MARKET INTELLIGENCE</div>',unsafe_allow_html=True)
 st.markdown('<div class="nexus-hero"><h1>📈 BTC / ETH 行情预测</h1><p>多周期市场分析 · 预测区间 · 风险模拟 · 高级研究 ｜ 仅供研究，不自动下单</p></div>',unsafe_allow_html=True)
 
@@ -854,3 +876,24 @@ with tab3:
 
 st.divider()
 st.caption("稳定增强版 v3 · 免费公开数据 · 无 API 密钥 · 不自动交易 · 无后台推送 · 仅供研究与模拟")
+
+st.divider()
+st.subheader("💬 内测用户反馈")
+st.caption("欢迎反馈预测区间的实际表现及产品体验。主观评价不等于经过统计验证的命中率。")
+with st.form("nexus_member_feedback",clear_on_submit=True):
+    feedback_period=st.selectbox("评价的预测周期",["1小时","4小时","24小时","整体体验"])
+    feedback_rating=st.radio("你觉得预测区间的表现如何？",["比较准确","一般","偏差较大","暂时无法判断"],horizontal=True)
+    feedback_comment=st.text_area("意见与建议",max_chars=1000,placeholder="例如：哪一天、哪个币种、什么周期的预测偏差较大？或者你希望改进什么功能？")
+    if st.form_submit_button("提交反馈",type="primary"):
+        if len(feedback_comment.strip())<5:
+            st.warning("请至少填写5个字的反馈内容。")
+        else:
+            try:
+                with auth_connection() as feedback_db:
+                    feedback_db.execute("INSERT INTO member_feedback(email,period,rating,comment,created_at) VALUES(?,?,?,?,?)",(
+                        st.session_state["member_email"],feedback_period,feedback_rating,feedback_comment.strip(),
+                        datetime.now(timezone.utc).isoformat()))
+                st.success("反馈已提交，感谢参与内测！")
+            except Exception:
+                st.error("反馈保存失败，请稍后再试。")
+st.caption("反馈暂存于测试数据库，服务器重建时可能丢失；正式开放前需迁移到持久化云数据库。")
