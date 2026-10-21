@@ -208,7 +208,12 @@ with tab1:
         st.subheader("🧮 模拟入场与仓位风险")
         st.caption("仅按已收盘 K 线生成方向和 ATR 参考位；入场以最近收盘价为观察参考，不等于当前可成交价格。")
         if direction_text == "观望" or last is None or age is None or age>120:
-            st.warning("指标尚未共振，暂不生成方向性模拟仓位。")
+            if last is None:
+                st.warning("建议观望：实时成交价不可用。")
+            elif age is None or age > 120:
+                st.warning("建议观望：行情数据过期，请刷新。")
+            else:
+                st.warning("建议观望：技术指标未共振，暂不生成模拟仓位。")
         else:
             sign = 1 if direction_text=="偏多" else -1
             entry = float(row.close)
