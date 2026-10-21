@@ -161,6 +161,23 @@ with tab1:
             if open24 > 0:
                 st.write(f"24小时涨跌：{(last/open24-1)*100:+.2f}%｜最高：{fmt(t.get('high24h'))}｜最低：{fmt(t.get('low24h'))} USDT")
         st.caption("多周期方向基于已收盘K线。币圈新闻和美联储公告仅作为事件背景，尚未纳入方向评分；未调用AI大模型，不冒充AI预测。")
+        st.subheader("🗞️ 新闻与宏观事件观察")
+        st.caption("事件信息独立于技术信号；尚未将新闻情绪或CPI/非农预期差转换成方向分数。")
+        for label, url in (("美联储", "https://www.federalreserve.gov/feeds/press_monetary.xml"), ("币圈", "https://www.coindesk.com/arc/outboundfeeds/rss/")):
+            try:
+                entries = feed(url)
+                if not entries:
+                    st.warning(f"{label}事件源暂无可用条目。")
+                for item in entries[:3]:
+                    title = item.get("title", "事件公告")
+                    link = item.get("link", "")
+                    published = item.get("published", "发布时间未知")
+                    st.write(f"{label}｜{published}｜{title}")
+                    if link: st.markdown(f"[查看原文]({link})")
+            except Exception:
+                st.warning(f"{label}事件源读取失败，不能据此判断没有风险。")
+        st.caption("官方数据核对：CPI https://www.bls.gov/cpi/ ｜ 非农 https://www.bls.gov/news.release/empsit.toc.htm ｜ FOMC https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm")
+        st.info("事件对历史K线的量化归因与回测尚未完成；新闻公告目前不会改变价格区间或开仓参考。")
         q1,q2,q3,q4=st.columns(4)
         q1.metric("RSI 14",fmt(row.rsi,1))
         q2.metric("ATR 14",fmt(row.atr))
