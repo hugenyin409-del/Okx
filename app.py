@@ -312,6 +312,7 @@ with st.sidebar:
         st.session_state.pop("member_email", None)
         st.rerun()
 
+st.markdown('<div class="nexus-ticker"><span>📢 NEXUS 平台内测期间免费开放　｜　预测区间仅供研究参考，不保证准确率或交易收益　｜　欢迎在页面底部反馈预测体验与改进建议　｜　感谢参与内测</span></div>',unsafe_allow_html=True)
 # Visible workspace navigation: works even if the mobile sidebar overlay stays open.
 # Both sidebar and main navigation share the same session-state key.
 def switch_workspace(target):
@@ -333,7 +334,6 @@ for workspace_col, workspace_name in zip(workspace_cols, workspace_names):
             args=(workspace_name,),
         )
 
-st.markdown('<div class="nexus-ticker"><span>📢 NEXUS 平台内测期间免费开放　｜　预测区间仅供研究参考，不保证准确率或交易收益　｜　欢迎在页面底部反馈预测体验与改进建议　｜　感谢参与内测</span></div>',unsafe_allow_html=True)
 st.markdown('<div class="nexus-kicker">NEXUS / MARKET INTELLIGENCE</div>',unsafe_allow_html=True)
 st.markdown('<div class="nexus-hero"><h1>NEXUS / Market Intelligence</h1><p>BTC · ETH 数字资产研究终端　/　实时行情　/　K线结构　/　波动区间　/　风险模拟</p></div>',unsafe_allow_html=True)
 
