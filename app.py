@@ -268,6 +268,9 @@ with st.sidebar:
     st.divider()
     st.markdown("##### 🧭 研究导航")
     def on_research_navigation_change():
+        # Widget callbacks run before the next script pass. Synchronize navigation
+        # here, never after either widget has been instantiated.
+        st.session_state["workspace_segmented"] = st.session_state["research_navigation"]
         st.session_state["nexus_close_sidebar_requested"] = True
 
     research_view=st.selectbox(
@@ -328,27 +331,27 @@ with st.sidebar:
         st.rerun()
 
 st.markdown('<div class="nexus-ticker"><span>📢 NEXUS 平台内测期间免费开放　｜　预测区间仅供研究参考，不保证准确率或交易收益　｜　欢迎在页面底部反馈预测体验与改进建议　｜　感谢参与内测</span></div>',unsafe_allow_html=True)
-# Visible workspace navigation: works even if the mobile sidebar overlay stays open.
-# Both sidebar and main navigation share the same session-state key.
-def switch_workspace(target):
-    st.session_state["research_navigation"] = target
-    st.session_state["nexus_close_sidebar_requested"] = True
-
+# Keep both navigation widgets in sync using callbacks (before widgets render).
+# Writing to a widget key after its creation raises StreamlitWidgetAlreadyInstantiatedError.
 workspace_names = ["📊 行情总览", "🔬 高级研究", "📰 市场新闻", "🏦 宏观日历"]
-# Compact four-tile navigation; selection remains synchronized with the sidebar.
+if "workspace_segmented" not in st.session_state:
+    st.session_state["workspace_segmented"] = research_view
+
+def on_workspace_segmented_change():
+    target = st.session_state.get("workspace_segmented")
+    if target in workspace_names:
+        st.session_state["research_navigation"] = target
+        st.session_state["nexus_close_sidebar_requested"] = True
+
 st.markdown('<div class="nexus-workspace-label">WORKSPACE <span>· ' + research_view + '</span></div>', unsafe_allow_html=True)
-# Native segmented selector avoids Streamlit's mobile column stacking.
-selected_workspace = st.segmented_control(
+st.segmented_control(
     "切换页面",
     options=workspace_names,
-    default=research_view,
     key="workspace_segmented",
+    on_change=on_workspace_segmented_change,
     label_visibility="collapsed",
     selection_mode="single",
 )
-if selected_workspace and selected_workspace != research_view:
-    switch_workspace(selected_workspace)
-    st.rerun()
 
 st.markdown('<div class="nexus-kicker">NEXUS / MARKET INTELLIGENCE</div>',unsafe_allow_html=True)
 st.markdown('<div class="nexus-hero"><h1>NEXUS / Market Intelligence</h1><p>BTC · ETH 数字资产研究终端　/　实时行情　/　K线结构　/　波动区间　/　风险模拟</p></div>',unsafe_allow_html=True)
