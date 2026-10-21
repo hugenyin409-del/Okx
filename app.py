@@ -95,8 +95,10 @@ pair = st.selectbox("交易对", ["BTC-USDT-SWAP","ETH-USDT-SWAP"])
 bar = st.radio("K 线周期", ["15m","1H","4H","1D"], index=2, horizontal=True)
 a,b,c = st.columns(3)
 with a: capital = st.number_input("模拟本金（USDT）", min_value=100.0, value=1000.0, step=100.0)
-with b: risk_pct = st.slider("单笔模拟风险占本金（%）", 0.25, 2.0, 1.0, 0.25)
-with c: leverage = st.slider("假设杠杆（倍）", 1, 20, 3)
+with b: risk_pct = st.slider("单笔模拟风险占本金（%）", 0.25, 50.0, 1.0, 0.25)
+with c: leverage = st.slider("假设杠杆（倍）", 1, 100, 3)
+if risk_pct > 2.0 or leverage > 20:
+    st.error("⚠️ 高风险模拟：单笔亏损预算超过本金2%或杠杆超过20倍，可能导致快速亏损甚至强平。这里仅展示假设情景，不代表交易所一定允许该杠杆。")
 fee_pct = st.number_input("假设单边手续费（%）", min_value=0.0, max_value=1.0, value=0.05, step=0.01)
 slip_pct = st.number_input("假设单边滑点（%）", min_value=0.0, max_value=1.0, value=0.02, step=0.01)
 if st.button("🔄 手动刷新数据"):
