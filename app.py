@@ -381,12 +381,55 @@ if research_view == "📊 行情总览":
         q3.metric("量比",fmt(row.vol/row.vol_ma if row.vol_ma>0 else None))
         q4.metric("未平仓量（张）",fmt(oi.get("oi"),0))
         st.subheader("📉 K线图与均线")
+        show_levels=st.checkbox("显示支撑位 / 压力位",value=True,key="chart_levels")
+        show_scenario=st.checkbox("显示未来走势情景与波动带（非预测保证）",value=True,key="chart_scenario")
         fig=go.Figure()
-        fig.add_trace(go.Candlestick(x=d.ts,open=d.open,high=d.high,low=d.low,close=d.close,name="K线"))
-        fig.add_trace(go.Scatter(x=d.ts,y=d.ema20,name="EMA20"))
-        fig.add_trace(go.Scatter(x=d.ts,y=d.ema50,name="EMA50"))
-        fig.update_layout(height=440,xaxis_rangeslider_visible=False,margin=dict(l=5,r=5,t=20,b=5))
+        fig.add_trace(go.Candlestick(x=d.ts,open=d.open,high=d.high,low=d.low,close=d.close,name="K线",
+                                    increasing_line_color="#2dd4a4",decreasing_line_color="#f06c81"))
+        fig.add_trace(go.Scatter(x=d.ts,y=d.ema20,name="EMA20",line=dict(color="#54b6f8",width=1.6)))
+        fig.add_trace(go.Scatter(x=d.ts,y=d.ema50,name="EMA50",line=dict(color="#f5c46a",width=1.6)))
+        chart_support=float(d.low.tail(20).min())
+        chart_resistance=float(d.high.tail(20).max())
+        if show_levels:
+            fig.add_hline(y=chart_support,line_dash="dash",line_color="#36d5a0",
+                          annotation_text=f"支撑 {chart_support:,.2f}",annotation_position="bottom right")
+            fig.add_hline(y=chart_resistance,line_dash="dash",line_color="#fb7185",
+                          annotation_text=f"压力 {chart_resistance:,.2f}",annotation_position="top right")
+        if show_scenario and last is not None and age is not None and age<=120 and len(d)>=30:
+            try:
+                interval_map={"15m":15,"1H":60,"4H":240,"1D":1440,"1W":10080}
+                minutes=interval_map.get(bar,60)
+                # Chart scenario only: extrapolate current EMA slope with a capped drift.
+                # ATR controls uncertainty width; this does not modify the frozen models.
+                chart_atr=float(row.atr)
+                chart_close=float(row.close)
+                chart_slope=(float(d.ema20.iloc[-1])-float(d.ema20.iloc[-6]))/5
+                chart_slope=float(np.clip(chart_slope,-chart_atr*0.35,chart_atr*0.35))
+                if np.isfinite(chart_atr) and chart_atr>0 and np.isfinite(chart_slope):
+                    start_time=pd.Timestamp(d.ts.iloc[-1])
+                    future_dates=[start_time+pd.Timedelta(minutes=minutes*k) for k in range(0,7)]
+                    centers=[last+chart_slope*k for k in range(7)]
+                    widths=[chart_atr*np.sqrt(k)*1.2 for k in range(7)]
+                    upper=[v+w for v,w in zip(centers,widths)]
+                    lower=[max(0,v-w) for v,w in zip(centers,widths)]
+                    fig.add_trace(go.Scatter(x=future_dates,y=upper,mode="lines",
+                                             line=dict(width=0),showlegend=False,hoverinfo="skip"))
+                    fig.add_trace(go.Scatter(x=future_dates,y=lower,mode="lines",fill="tonexty",
+                                             fillcolor="rgba(64,160,241,.13)",line=dict(width=0),
+                                             name="情景波动带（非置信区间）"))
+                    fig.add_trace(go.Scatter(x=future_dates,y=centers,mode="lines+markers",
+                                             line=dict(color="#72c6ff",dash="dot",width=2.5),
+                                             marker=dict(size=4),name="EMA斜率情景（非方向预测）"))
+            except (ValueError,TypeError,OverflowError):
+                st.caption("未来情景暂不可用，历史K线仍可正常查看。")
+        fig.update_layout(height=510,xaxis_rangeslider_visible=False,
+                          margin=dict(l=8,r=12,t=20,b=12),paper_bgcolor="#0b1424",
+                          plot_bgcolor="#0b1424",font=dict(color="#d2e4f5"),
+                          xaxis=dict(showgrid=True,gridcolor="rgba(135,169,206,.09)"),
+                          yaxis=dict(showgrid=True,gridcolor="rgba(135,169,206,.11)"),
+                          legend=dict(orientation="h",y=1.12,x=0))
         st.plotly_chart(fig,use_container_width=True)
+        st.caption("支撑/压力取最近20根已收盘K线的高低点；右侧虚线按EMA20近期斜率作情景外推，阴影宽度按ATR扩展，不是冻结预测模型输出，也不具有统计覆盖率保证。")
         st.subheader("🎯 分时段参考区间（1小时 / 4小时 / 1天）")
         st.caption("结合一年日线历史波动、24小时波动、资金费率和多周期趋势；新闻/宏观仅标注事件风险，未接入AI新闻语义模型。")
         if last is None or age is None or age > 120:
