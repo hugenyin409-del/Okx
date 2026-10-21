@@ -337,17 +337,18 @@ def switch_workspace(target):
 workspace_names = ["📊 行情总览", "🔬 高级研究", "📰 市场新闻", "🏦 宏观日历"]
 # Compact four-tile navigation; selection remains synchronized with the sidebar.
 st.markdown('<div class="nexus-workspace-label">WORKSPACE <span>· ' + research_view + '</span></div>', unsafe_allow_html=True)
-workspace_cols = st.columns(2, gap="small")
-for index, workspace_name in enumerate(workspace_names):
-    with workspace_cols[index % 2]:
-        st.button(
-            workspace_name,
-            key="workspace_top_" + workspace_name,
-            use_container_width=True,
-            type="primary" if research_view == workspace_name else "secondary",
-            on_click=switch_workspace,
-            args=(workspace_name,),
-        )
+# Native segmented selector avoids Streamlit's mobile column stacking.
+selected_workspace = st.segmented_control(
+    "切换页面",
+    options=workspace_names,
+    default=research_view,
+    key="workspace_segmented",
+    label_visibility="collapsed",
+    selection_mode="single",
+)
+if selected_workspace and selected_workspace != research_view:
+    switch_workspace(selected_workspace)
+    st.rerun()
 
 st.markdown('<div class="nexus-kicker">NEXUS / MARKET INTELLIGENCE</div>',unsafe_allow_html=True)
 st.markdown('<div class="nexus-hero"><h1>NEXUS / Market Intelligence</h1><p>BTC · ETH 数字资产研究终端　/　实时行情　/　K线结构　/　波动区间　/　风险模拟</p></div>',unsafe_allow_html=True)
