@@ -49,6 +49,41 @@ div.stButton > button,div.stFormSubmitButton > button {border-radius:11px;}
 .nexus-ticker span {display:inline-block;padding-left:100%;animation:nexus-marquee 24s linear infinite;color:#b9e7ff;font-size:13px;font-weight:600;}
 @keyframes nexus-marquee {from{transform:translateX(0)}to{transform:translateX(-100%)}}
 @media(prefers-reduced-motion:reduce){.nexus-ticker span{animation:none;padding-left:12px;white-space:normal}}
+
+/* NEXUS Terminal Pro: cohesive visual system, responsive and accessible */
+:root{--nx-bg:#080d15;--nx-panel:#111b2a;--nx-border:rgba(136,171,209,.16);--nx-blue:#64c6ff;--nx-muted:#94a8c0}
+[data-testid="stAppViewContainer"]{background:radial-gradient(ellipse 65% 28% at 60% -7%,rgba(34,106,173,.17),transparent 80%),linear-gradient(180deg,#080f1a 0%,#080d15 70%)!important}
+[data-testid="stSidebar"]{background:linear-gradient(180deg,#0c1624,#0a111d)!important;border-right:1px solid var(--nx-border)!important}
+[data-testid="stSidebar"] [data-testid="stVerticalBlock"]{gap:.58rem}
+[data-testid="stHeader"]{background:rgba(8,14,24,.76)!important;backdrop-filter:blur(16px)}
+.block-container{max-width:1540px!important;padding-top:1.35rem!important;padding-bottom:3rem!important}
+h1,h2,h3{font-weight:720!important;letter-spacing:-.035em!important}
+h3{font-size:1.23rem!important}
+[data-testid="stMetric"]{background:linear-gradient(150deg,rgba(21,35,55,.98),rgba(12,23,39,.97))!important;border:1px solid var(--nx-border)!important;border-radius:14px!important;padding:20px!important;box-shadow:0 10px 32px rgba(0,0,0,.12)}
+[data-testid="stMetricLabel"]{color:var(--nx-muted)!important;letter-spacing:.025em}
+[data-testid="stMetricValue"]{font-variant-numeric:tabular-nums;letter-spacing:-.04em;font-size:clamp(1.25rem,2vw,1.9rem)!important}
+[data-testid="stExpander"],[data-testid="stForm"]{border:1px solid var(--nx-border)!important;border-radius:14px!important;background:rgba(16,28,45,.8)!important}
+[data-testid="stExpander"]{box-shadow:none!important}
+[data-testid="stForm"]{padding:20px!important}
+[data-testid="stSelectbox"]>div>div,[data-testid="stNumberInput"] input,[data-testid="stTextInput"] input,[data-testid="stTextArea"] textarea{border-radius:10px!important;background:#0e1929!important;border-color:rgba(124,158,198,.21)!important}
+div.stButton>button,div.stFormSubmitButton>button{min-height:40px;border-radius:10px!important;transition:transform .15s,border-color .15s,background .15s}
+div.stButton>button:hover,div.stFormSubmitButton>button:hover{border-color:#58b7ed!important;transform:translateY(-1px)}
+div.stButton>button[kind="primary"],div.stFormSubmitButton>button[kind="primary"]{background:linear-gradient(120deg,#1874bf,#2498c9)!important;box-shadow:0 6px 22px rgba(24,116,191,.2)}
+[data-testid="stAlert"]{border-radius:11px!important;border:1px solid rgba(132,169,211,.16)!important}
+hr{border-color:rgba(130,159,191,.12)!important;margin:1.15rem 0!important}
+.nexus-brand{font-size:16px!important;letter-spacing:.19em!important;color:#c0ebff!important;padding-top:6px}
+.nexus-kicker{font-size:11px!important;letter-spacing:.25em!important;color:#78bfe7!important}
+.nexus-hero{position:relative;overflow:hidden;background:linear-gradient(115deg,rgba(19,42,67,.98),rgba(10,24,40,.97))!important;border:1px solid rgba(105,164,218,.2)!important;border-radius:18px!important;padding:29px 34px!important;box-shadow:0 18px 45px rgba(0,0,0,.14)!important}
+.nexus-hero:after{content:"";position:absolute;right:-65px;top:-125px;width:310px;height:310px;border-radius:50%;border:1px solid rgba(105,190,246,.12);box-shadow:0 0 0 42px rgba(81,161,219,.025),0 0 0 85px rgba(81,161,219,.018);pointer-events:none}
+.nexus-hero h1{font-size:clamp(26px,3vw,38px)!important;font-weight:750!important}
+.nexus-hero p{max-width:760px;color:#a6bdd4!important;line-height:1.7}
+.nexus-ticker{border-radius:9px!important;background:rgba(15,37,57,.85)!important;border-color:rgba(81,154,210,.18)!important}
+[data-testid="stSidebar"] [role="radiogroup"]{gap:.35rem}
+[data-testid="stSidebar"] [role="radiogroup"] label{padding:9px 11px;border:1px solid rgba(119,160,205,.12);border-radius:9px;background:rgba(21,38,60,.48);transition:background .15s}
+[data-testid="stSidebar"] [role="radiogroup"] label:hover{background:rgba(41,80,118,.46)}
+@media(max-width:768px){.block-container{padding:1rem .8rem 2rem!important}.nexus-hero{padding:21px 19px!important}.nexus-hero:after{opacity:.35}[data-testid="stMetric"]{padding:13px!important}[data-testid="stMetricValue"]{font-size:1.18rem!important}}
+@media(prefers-reduced-motion:reduce){div.stButton>button,div.stFormSubmitButton>button{transition:none!important;transform:none!important}}
+
 </style>
 """,unsafe_allow_html=True)
 
@@ -241,7 +276,7 @@ with st.sidebar:
 
 st.markdown('<div class="nexus-ticker"><span>📢 NEXUS 平台内测期间免费开放　｜　预测区间仅供研究参考，不保证准确率或交易收益　｜　欢迎在页面底部反馈预测体验与改进建议　｜　感谢参与内测</span></div>',unsafe_allow_html=True)
 st.markdown('<div class="nexus-kicker">NEXUS / MARKET INTELLIGENCE</div>',unsafe_allow_html=True)
-st.markdown('<div class="nexus-hero"><h1>📈 BTC / ETH 行情预测</h1><p>多周期市场分析 · 预测区间 · 风险模拟 · 高级研究 ｜ 仅供研究，不自动下单</p></div>',unsafe_allow_html=True)
+st.markdown('<div class="nexus-hero"><h1>NEXUS / Market Intelligence</h1><p>BTC · ETH 数字资产研究终端　/　实时行情　/　K线结构　/　波动区间　/　风险模拟</p></div>',unsafe_allow_html=True)
 
 
 BASE = "https://www.okx.com"
