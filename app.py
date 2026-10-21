@@ -244,7 +244,39 @@ with st.sidebar:
     st.success("● FREE 会员 · 已登录")
     st.divider()
     st.markdown("##### 🧭 研究导航")
-    research_view=st.selectbox("选择研究页面",["📊 行情总览","🔬 高级研究","📰 市场新闻","🏦 宏观日历"],key="research_navigation",help="选择后主页面会切换到对应工作区")
+    def on_research_navigation_change():
+        st.session_state["nexus_close_sidebar_requested"] = True
+
+    research_view=st.selectbox(
+        "选择研究页面",
+        ["📊 行情总览","🔬 高级研究","📰 市场新闻","🏦 宏观日历"],
+        key="research_navigation",
+        on_change=on_research_navigation_change,
+        help="切换工作区后，手机端尝试自动收起侧边栏",
+    )
+    if st.session_state.pop("nexus_close_sidebar_requested", False):
+        # Streamlit has no public Python API to close the sidebar after a widget change.
+        # This optional browser-side enhancement is guarded to avoid breaking navigation.
+        import streamlit.components.v1 as components
+        components.html("""
+        <script>
+        (function () {
+          function closeSidebar() {
+            try {
+              const doc = window.parent.document;
+              const sidebar = doc.querySelector('[data-testid="stSidebar"]');
+              if (!sidebar) return;
+              const expanded = sidebar.getAttribute('aria-expanded');
+              const close = sidebar.querySelector('[data-testid="stSidebarCollapseButton"] button, button[aria-label*="Close"], button[aria-label*="close"], button[aria-label*="收起"], button[aria-label*="关闭"]');
+              if (close && expanded !== 'false') close.click();
+            } catch (e) { /* Browser isolation may prevent parent access. */ }
+          }
+          setTimeout(closeSidebar, 180);
+          setTimeout(closeSidebar, 500);
+        })();
+        </script>
+        """, height=0)
+
     st.caption("高级研究包含历史回测、实验模型与前瞻验证。")
 
     with st.expander("📚 使用指南", expanded=False):
