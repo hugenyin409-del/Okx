@@ -4,11 +4,158 @@ import numpy as np
 import streamlit as st
 import plotly.graph_objects as go
 import feedparser
+import sqlite3
+import hashlib
+import hmac
+import secrets
+import os
+import re
+import time
+from pathlib import Path
 from datetime import datetime, timezone
 
-st.set_page_config(page_title="OKX BTC ETH 合约研究台 Pro", page_icon="📈", layout="wide")
-st.title("📈 BTC / ETH 行情预测")
-st.caption("简洁版 · 1小时 / 4小时预测 · 风险模拟 · 高级研究可展开 · 不自动下单")
+st.set_page_config(page_title="NEXUS | 数字资产行情研究终端", page_icon="📈", layout="wide", initial_sidebar_state="expanded")
+
+st.markdown("""
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+html, body, [class*="css"], [data-testid="stAppViewContainer"] {font-family:Inter,"PingFang SC","Microsoft YaHei",sans-serif;}
+[data-testid="stAppViewContainer"] {
+  background: radial-gradient(ellipse 72% 45% at 85% 0%,rgba(32,95,167,.21),transparent 72%),
+              radial-gradient(ellipse 60% 55% at 0% 80%,rgba(14,95,115,.14),transparent 72%),#070d18;
+  color:#e9f0fb;
+}
+[data-testid="stHeader"] {background:rgba(7,13,24,.6);}
+[data-testid="stSidebar"] {background:#0b1424;border-right:1px solid rgba(115,155,210,.15);}
+.block-container {padding-top:2rem;max-width:1450px;}
+h1,h2,h3 {letter-spacing:-.025em;color:#f0f6ff!important;}
+h1 {font-weight:800!important;}
+[data-testid="stMetric"] {background:linear-gradient(145deg,rgba(24,43,68,.94),rgba(13,26,45,.92));border:1px solid rgba(102,151,211,.19);border-radius:16px;padding:16px 18px;}
+[data-testid="stMetricValue"] {color:#e6f6ff;font-weight:700;}
+[data-testid="stExpander"] {background:rgba(13,27,47,.78);border:1px solid rgba(107,155,214,.17);border-radius:14px;overflow:hidden;}
+div.stButton > button[kind="primary"],div.stFormSubmitButton > button[kind="primary"] {background:linear-gradient(110deg,#1679df,#17a5c2);color:white;border:0;border-radius:11px;font-weight:700;}
+div.stButton > button,div.stFormSubmitButton > button {border-radius:11px;}
+[data-testid="stForm"] {background:rgba(13,26,46,.83);border:1px solid rgba(99,154,217,.23);border-radius:20px;padding:22px;}
+.nexus-kicker {color:#5dbdf8;font-size:12px;font-weight:800;letter-spacing:.24em;margin-bottom:9px;}
+.nexus-hero {background:linear-gradient(110deg,rgba(17,40,69,.95),rgba(10,22,41,.85));border:1px solid rgba(95,154,224,.24);border-radius:22px;padding:25px 30px;margin:10px 0 22px;box-shadow:0 20px 55px rgba(0,0,0,.16);}
+.nexus-hero h1 {margin:0;font-size:clamp(27px,3.4vw,42px);line-height:1.2;}
+.nexus-hero p {color:#a8bbd5;margin:11px 0 0;font-size:14px;}
+.nexus-brand {font-size:14px;font-weight:800;letter-spacing:.22em;color:#8bd7ff;}
+.nexus-small {color:#8299b8;font-size:12px;}
+</style>
+""",unsafe_allow_html=True)
+
+# Prototype authentication storage: set AUTH_DB_PATH to a durable mounted volume.
+# For public deployment use managed authentication + verified email and a persistent DB.
+AUTH_DB_PATH = os.environ.get("AUTH_DB_PATH", "/tmp/nexus_members.db")
+def auth_connection():
+    Path(AUTH_DB_PATH).parent.mkdir(parents=True,exist_ok=True)
+    conn=sqlite3.connect(AUTH_DB_PATH,timeout=10)
+    conn.execute("PRAGMA busy_timeout=10000")
+    conn.execute("""CREATE TABLE IF NOT EXISTS members (
+        email TEXT PRIMARY KEY, salt TEXT NOT NULL, password_hash TEXT NOT NULL,
+        created_at TEXT NOT NULL, is_active INTEGER NOT NULL DEFAULT 1
+    )""")
+    conn.commit()
+    return conn
+
+def normalize_email(value):
+    return value.strip().lower()
+
+def valid_email(value):
+    return len(value)<=254 and bool(re.fullmatch(r"[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:\\.[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)+",value))
+
+def password_hash(password,salt):
+    return hashlib.pbkdf2_hmac("sha256",password.encode("utf-8"),bytes.fromhex(salt),310000).hex()
+
+def register_member(email,password):
+    salt=secrets.token_hex(16)
+    with auth_connection() as conn:
+        conn.execute("INSERT INTO members(email,salt,password_hash,created_at) VALUES(?,?,?,?)",
+                     (email,salt,password_hash(password,salt),datetime.now(timezone.utc).isoformat()))
+
+def verify_member(email,password):
+    with auth_connection() as conn:
+        row=conn.execute("SELECT salt,password_hash,is_active FROM members WHERE email=?",(email,)).fetchone()
+    if row is None:
+        # Do equivalent expensive work to reduce obvious account enumeration timing.
+        password_hash(password,"00"*16)
+        return False
+    return bool(row[2]) and hmac.compare_digest(password_hash(password,row[0]),row[1])
+
+def active_member(email):
+    with auth_connection() as conn:
+        row=conn.execute("SELECT is_active FROM members WHERE email=?",(email,)).fetchone()
+    return bool(row and row[0])
+
+def login_gate():
+    if st.session_state.get("member_email"):
+        if active_member(st.session_state["member_email"]):
+            return
+        st.session_state.pop("member_email",None)
+    st.markdown('<div class="nexus-kicker">NEXUS / RESEARCH TERMINAL</div>',unsafe_allow_html=True)
+    st.markdown('<div class="nexus-hero"><h1>洞察市场，始于数据。</h1><p>BTC · ETH 多周期行情研究 / 预测区间 / 风险评估 · 注册免费开放</p></div>',unsafe_allow_html=True)
+    left,mid,right=st.columns([1,1.4,1])
+    with mid:
+        tab_login,tab_register=st.tabs(["🔐 会员登录","✉️ 免费注册"])
+        with tab_login:
+            with st.form("nexus_login",clear_on_submit=False):
+                email=st.text_input("邮箱地址",key="login_email",placeholder="you@example.com")
+                password=st.text_input("登录密码",type="password",key="login_password")
+                submit=st.form_submit_button("登录研究终端",type="primary",use_container_width=True)
+                if submit:
+                    now=time.monotonic()
+                    attempts=st.session_state.get("login_attempts",[])
+                    attempts=[t for t in attempts if now-t<900]
+                    if len(attempts)>=8:
+                        st.error("尝试次数过多，请15分钟后再试。")
+                    elif verify_member(normalize_email(email),password):
+                        st.session_state["member_email"]=normalize_email(email)
+                        st.session_state["login_attempts"]=[]
+                        st.rerun()
+                    else:
+                        st.session_state["login_attempts"]=attempts+[now]
+                        st.error("邮箱或密码错误，或账号已停用。")
+        with tab_register:
+            with st.form("nexus_register",clear_on_submit=False):
+                new_email=st.text_input("注册邮箱",placeholder="you@example.com")
+                new_password=st.text_input("设置密码（至少12位）",type="password")
+                confirm=st.text_input("确认密码",type="password")
+                accepted=st.checkbox("我理解本站仅提供研究参考，不提供交易或收益保证")
+                create=st.form_submit_button("免费创建账号",type="primary",use_container_width=True)
+                if create:
+                    normalized=normalize_email(new_email)
+                    if not valid_email(normalized):
+                        st.error("请输入有效的邮箱地址。")
+                    elif len(new_password)<12 or len(new_password)>128:
+                        st.error("密码长度需要在12至128位之间。")
+                    elif new_password!=confirm:
+                        st.error("两次密码不一致。")
+                    elif not accepted:
+                        st.error("请先确认使用须知。")
+                    else:
+                        try:
+                            register_member(normalized,new_password)
+                            st.success("注册成功！请切换到会员登录。")
+                        except sqlite3.IntegrityError:
+                            st.error("该邮箱已注册，请直接登录。")
+                        except Exception:
+                            st.error("注册暂不可用，请稍后再试。")
+        st.caption("当前为免费注册测试版：尚未发送邮箱验证邮件，也没有找回密码功能。正式对外开放前需要持久化数据库、邮箱验证和完善的安全防护。")
+    st.stop()
+
+login_gate()
+with st.sidebar:
+    st.markdown('<div class="nexus-brand">◈ NEXUS TERMINAL</div>',unsafe_allow_html=True)
+    st.caption("FREE RESEARCH ACCESS")
+    st.write("👤 "+st.session_state["member_email"])
+    if st.button("退出登录",key="nexus_logout",use_container_width=True):
+        st.session_state.pop("member_email",None)
+        st.rerun()
+
+st.markdown('<div class="nexus-kicker">NEXUS / MARKET INTELLIGENCE</div>',unsafe_allow_html=True)
+st.markdown('<div class="nexus-hero"><h1>📈 BTC / ETH 行情预测</h1><p>多周期市场分析 · 预测区间 · 风险模拟 · 高级研究 ｜ 仅供研究，不自动下单</p></div>',unsafe_allow_html=True)
+
 
 BASE = "https://www.okx.com"
 S = requests.Session()
