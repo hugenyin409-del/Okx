@@ -420,6 +420,23 @@ with tab1:
                     st.warning(f"同宽度测试暂不可用：{exc}")
             st.subheader("🧭 前瞻验证：冻结模型，等待新行情")
             st.caption("此前历史数据已经被反复查看和调参，不能再称为全新独立测试。此处冻结当前两套算法，只评价2026-10-22 00:00（北京时间）之后新出现的完整小时K线。不会修改交易参考。")
+            st.caption("进度目标：先积累100个上涨趋势预测点作初步观察，300个作阶段性复核；这是观察门槛，不是统计显著性或独立样本保证。")
+            try:
+                progress_hist = candles(pair, "1H")
+                progress_close = progress_hist.close.astype(float).reset_index(drop=True)
+                progress_time = progress_hist.ts.reset_index(drop=True)
+                progress_cutoff = pd.Timestamp("2026-10-22 00:00:00", tz="Asia/Shanghai")
+                progress_trend = (progress_close / progress_close.shift(24) - 1) > 0.01
+                for progress_h in (1, 4):
+                    # Count only forecast origins with completed outcomes and known 24h trend.
+                    valid_indices = range(24, max(24, len(progress_close) - progress_h))
+                    count = sum(bool(progress_time.iloc[i] >= progress_cutoff and progress_trend.iloc[i]) for i in valid_indices)
+                    st.write(f"**{progress_h}小时上涨趋势：{count} / 100 个初步观察点**")
+                    st.progress(min(count / 100, 1.0))
+                    st.caption(f"距100点还差 {max(0,100-count)} 个；距300点还差 {max(0,300-count)} 个。1小时和4小时的预测窗口会重叠，不能把这些点当作独立交易。")
+                st.caption("上方为轻量进度估算，基于最近已收盘小时K线；点击下方按钮可用更长历史数据核对覆盖率。缓存可能造成短暂延迟。")
+            except Exception as progress_exc:
+                st.warning(f"进度暂不可用：{progress_exc}")
             if st.button("▶️ 检查前瞻验证进度",key="prospective_holdout"):
                 try:
                     fresh=historical_hourly(pair)
