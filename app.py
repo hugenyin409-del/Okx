@@ -509,13 +509,13 @@ with tab1:
         q2.metric("ATR 14",fmt(row.atr))
         q3.metric("量比",fmt(row.vol/row.vol_ma if row.vol_ma>0 else None))
         q4.metric("未平仓量（张）",fmt(oi.get("oi"),0))
-        with st.expander("📉 K线图与均线（按需展开）", expanded=False):
-            fig=go.Figure()
-            fig.add_trace(go.Candlestick(x=d.ts,open=d.open,high=d.high,low=d.low,close=d.close,name="K线"))
-            fig.add_trace(go.Scatter(x=d.ts,y=d.ema20,name="EMA20"))
-            fig.add_trace(go.Scatter(x=d.ts,y=d.ema50,name="EMA50"))
-            fig.update_layout(height=440,xaxis_rangeslider_visible=False,margin=dict(l=5,r=5,t=20,b=5))
-            st.plotly_chart(fig,use_container_width=True)
+        st.subheader("📉 K线图与均线")
+        fig=go.Figure()
+        fig.add_trace(go.Candlestick(x=d.ts,open=d.open,high=d.high,low=d.low,close=d.close,name="K线"))
+        fig.add_trace(go.Scatter(x=d.ts,y=d.ema20,name="EMA20"))
+        fig.add_trace(go.Scatter(x=d.ts,y=d.ema50,name="EMA50"))
+        fig.update_layout(height=440,xaxis_rangeslider_visible=False,margin=dict(l=5,r=5,t=20,b=5))
+        st.plotly_chart(fig,use_container_width=True)
         st.subheader("🎯 分时段参考区间（1小时 / 4小时 / 1天）")
         st.caption("结合一年日线历史波动、24小时波动、资金费率和多周期趋势；新闻/宏观仅标注事件风险，未接入AI新闻语义模型。")
         if last is None or age is None or age > 120:
@@ -547,52 +547,53 @@ with tab1:
                 st.caption(f"日线历史样本 {len(daily_returns)} 天；长期波动率取最近最多240个日收益；24小时变化参与波幅估计。该范围没有统计覆盖率保证。")
             except Exception as exc:
                 st.warning(f"长期历史波动分析不可用：{exc}")
-        st.subheader("🧪 实验版综合预测（1小时 / 4小时）")
-        st.caption("与上方原版预测并列展示，不覆盖原有区间或交易参数。实验版目前仅使用历史75分位绝对涨跌幅，不包含新闻、宏观或方向预测；尚不是多模型融合。")
-        if last is None or age is None or age > 120:
-            st.warning("实时价格缺失或超过120秒，实验版暂停显示。")
-        else:
-            try:
-                exp_hourly = candles(pair,"1H")
-                exp_close = exp_hourly.close.astype(float).reset_index(drop=True)
-                exp_rows = []
-                for exp_hours in (1,4):
-                    exp_move = (exp_close.shift(-exp_hours)/exp_close-1).abs()
-                    exp_sample = exp_move.iloc[:-exp_hours].tail(720).dropna()
-                    if len(exp_sample)<600: raise ValueError(f"{exp_hours}小时历史有效样本不足600")
-                    exp_half = float(exp_sample.quantile(0.75))
-                    exp_rows.append({"周期":f"{exp_hours}小时","模型":"实验版：历史75分位","下沿 USDT":round(max(0,last*(1-exp_half)),2),"上沿 USDT":round(last*(1+exp_half),2),"半宽%":round(exp_half*100,3),"历史样本":len(exp_sample)})
-                st.dataframe(pd.DataFrame(exp_rows),use_container_width=True,hide_index=True)
-                st.caption("采用最近720个已完成的历史收益窗口估算宽度，中心为当前实时价格；与此前一年样本外回测的历史测试期不同，历史命中率不可直接视为当前区间的保证。")
-            except Exception as exc:
-                st.warning(f"实验版区间暂不可用：{exc}")
-        st.subheader("🧪 实验版B：条件分位区间（1小时 / 4小时）")
-        st.caption("研究用：用已完成历史收益的12.5%和87.5%分位估算上下沿；上涨趋势优先采用同类历史样本，样本不足回退总体。原实验版不变。")
-        if last is None or age is None or age > 120:
-            st.warning("实时价格不可用或过期，实验版B暂停显示。")
-        else:
-            try:
-                hist = candles(pair,"1H")
-                closes = hist.close.astype(float).reset_index(drop=True)
-                trend24 = float(closes.iloc[-1]/closes.iloc[-25]-1) if len(closes)>=25 else float("nan")
-                trend_label = "上涨趋势" if trend24>0.01 else ("下跌趋势" if trend24< -0.01 else "震荡")
-                st.write(f"已收盘小时线过去24小时变化：{trend24*100:+.2f}%｜分类：{trend_label}")
-                rows_b=[]
-                for hh in (1,4):
-                    returns = closes.shift(-hh)/closes-1
-                    known = returns.shift(hh)
-                    regime = (closes/closes.shift(24)-1>0.01).shift(hh).fillna(False).astype(bool)
-                    recent = known.tail(720).dropna()
-                    if len(recent)<600: raise ValueError(f"{hh}小时有效历史窗口不足600")
-                    selected = known.where(regime).tail(720).dropna() if trend_label=="上涨趋势" else recent
-                    if len(selected)<120: selected=recent
-                    lo=float(selected.quantile(.125))
-                    hi=float(selected.quantile(.875))
-                    rows_b.append({"周期":f"{hh}小时","模型":"实验版B：条件分位","下沿 USDT":round(max(0,last*(1+lo)),2),"上沿 USDT":round(last*(1+hi),2),"下行幅度%":round(lo*100,3),"上行幅度%":round(hi*100,3),"有效样本":len(selected)})
-                st.dataframe(pd.DataFrame(rows_b),use_container_width=True,hide_index=True)
-                st.caption("未验证优于原版；请在高级研究运行同点样本外对照。上下沿并非保证范围，不代表买卖建议。")
-            except Exception as exc:
-                st.warning(f"实验版B暂不可用：{exc}")
+        with st.expander("🧪 高级选项：实验版预测模型（研究用）", expanded=False):
+            st.subheader("🧪 实验版综合预测（1小时 / 4小时）")
+            st.caption("与上方原版预测并列展示，不覆盖原有区间或交易参数。实验版目前仅使用历史75分位绝对涨跌幅，不包含新闻、宏观或方向预测；尚不是多模型融合。")
+            if last is None or age is None or age > 120:
+                st.warning("实时价格缺失或超过120秒，实验版暂停显示。")
+            else:
+                try:
+                    exp_hourly = candles(pair,"1H")
+                    exp_close = exp_hourly.close.astype(float).reset_index(drop=True)
+                    exp_rows = []
+                    for exp_hours in (1,4):
+                        exp_move = (exp_close.shift(-exp_hours)/exp_close-1).abs()
+                        exp_sample = exp_move.iloc[:-exp_hours].tail(720).dropna()
+                        if len(exp_sample)<600: raise ValueError(f"{exp_hours}小时历史有效样本不足600")
+                        exp_half = float(exp_sample.quantile(0.75))
+                        exp_rows.append({"周期":f"{exp_hours}小时","模型":"实验版：历史75分位","下沿 USDT":round(max(0,last*(1-exp_half)),2),"上沿 USDT":round(last*(1+exp_half),2),"半宽%":round(exp_half*100,3),"历史样本":len(exp_sample)})
+                    st.dataframe(pd.DataFrame(exp_rows),use_container_width=True,hide_index=True)
+                    st.caption("采用最近720个已完成的历史收益窗口估算宽度，中心为当前实时价格；与此前一年样本外回测的历史测试期不同，历史命中率不可直接视为当前区间的保证。")
+                except Exception as exc:
+                    st.warning(f"实验版区间暂不可用：{exc}")
+            st.subheader("🧪 实验版B：条件分位区间（1小时 / 4小时）")
+            st.caption("研究用：用已完成历史收益的12.5%和87.5%分位估算上下沿；上涨趋势优先采用同类历史样本，样本不足回退总体。原实验版不变。")
+            if last is None or age is None or age > 120:
+                st.warning("实时价格不可用或过期，实验版B暂停显示。")
+            else:
+                try:
+                    hist = candles(pair,"1H")
+                    closes = hist.close.astype(float).reset_index(drop=True)
+                    trend24 = float(closes.iloc[-1]/closes.iloc[-25]-1) if len(closes)>=25 else float("nan")
+                    trend_label = "上涨趋势" if trend24>0.01 else ("下跌趋势" if trend24< -0.01 else "震荡")
+                    st.write(f"已收盘小时线过去24小时变化：{trend24*100:+.2f}%｜分类：{trend_label}")
+                    rows_b=[]
+                    for hh in (1,4):
+                        returns = closes.shift(-hh)/closes-1
+                        known = returns.shift(hh)
+                        regime = (closes/closes.shift(24)-1>0.01).shift(hh).fillna(False).astype(bool)
+                        recent = known.tail(720).dropna()
+                        if len(recent)<600: raise ValueError(f"{hh}小时有效历史窗口不足600")
+                        selected = known.where(regime).tail(720).dropna() if trend_label=="上涨趋势" else recent
+                        if len(selected)<120: selected=recent
+                        lo=float(selected.quantile(.125))
+                        hi=float(selected.quantile(.875))
+                        rows_b.append({"周期":f"{hh}小时","模型":"实验版B：条件分位","下沿 USDT":round(max(0,last*(1+lo)),2),"上沿 USDT":round(last*(1+hi),2),"下行幅度%":round(lo*100,3),"上行幅度%":round(hi*100,3),"有效样本":len(selected)})
+                    st.dataframe(pd.DataFrame(rows_b),use_container_width=True,hide_index=True)
+                    st.caption("未验证优于原版；请在高级研究运行同点样本外对照。上下沿并非保证范围，不代表买卖建议。")
+                except Exception as exc:
+                    st.warning(f"实验版B暂不可用：{exc}")
         st.info("事件风险：币圈新闻、美联储公告、CPI及非农可能使波动超出区间。目前未验证新闻发布时间及情绪，暂不将标题机械转换成涨跌或波动倍数。")
         st.divider()
         st.subheader("🧮 模拟入场与仓位风险")
