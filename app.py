@@ -63,7 +63,12 @@ def normalize_email(value):
     return value.strip().lower()
 
 def valid_email(value):
-    return len(value)<=254 and bool(re.fullmatch(r"[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:\\.[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)+",value))
+    if len(value) > 254 or "@" not in value:
+        return False
+    local, domain = value.rsplit("@", 1)
+    return bool(local and len(local) <= 64 and re.fullmatch(r"[A-Za-z0-9.!#$%&'*+/=?^`{|}~-]+", local)
+                and re.fullmatch(r"[A-Za-z0-9-]+(?:[.][A-Za-z0-9-]+)+", domain)
+                and all(not part.startswith("-") and not part.endswith("-") for part in domain.split(".")))
 
 def password_hash(password,salt):
     return hashlib.pbkdf2_hmac("sha256",password.encode("utf-8"),bytes.fromhex(salt),310000).hex()
