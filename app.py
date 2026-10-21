@@ -225,6 +225,35 @@ with tab1:
                 st.warning(f"历史数据扩充未完成：{exc}。原有行情分析不受影响。")
         st.info("待接入：CPI公布时间、非农公布时间、FOMC决议时间及各自历史实际值。没有经过官方核对的事件，不计入宏观事件回测。")
         st.caption("历史事件数据需与BTC/ETH价格历史重叠，才能计算事件后1小时、4小时和24小时波动；暂不据此调整参考区间。")
+        st.subheader("🗓️ 官方宏观事件与历史小时K线匹配（首批）")
+        st.caption("以下为已核对的2026年美国官方日程；公布时间按纽约时区处理。回报采用公布前最后一根已收盘小时线与目标时间之后首根已收盘小时线，实际测量窗口最多偏离约一小时。")
+        if st.button("📊 匹配2026年CPI、非农与FOMC事件",key="match_official_macro"):
+            try:
+                history = historical_hourly(pair)
+                close_times = pd.to_datetime(history.ts,utc=True) + pd.Timedelta(hours=1)
+                prices = history.close.astype(float).to_numpy()
+                dates = {
+                    "CPI":["2026-01-13","2026-02-13","2026-03-11","2026-04-10","2026-05-12","2026-06-10","2026-07-14","2026-08-12","2026-09-11","2026-10-14"],
+                    "非农":["2026-01-09","2026-02-11","2026-03-06","2026-04-03","2026-05-08","2026-06-05","2026-07-02","2026-08-07","2026-09-04","2026-10-02"],
+                    "FOMC":["2026-01-28","2026-03-18","2026-04-29","2026-06-17","2026-07-29","2026-09-16"]}
+                results=[]
+                for kind,days in dates.items():
+                    for day in days:
+                        clock="14:00" if kind=="FOMC" else "08:30"
+                        published=pd.Timestamp(day+" "+clock,tz="America/New_York").tz_convert("UTC")
+                        before=int(close_times.searchsorted(published,side="right"))-1
+                        if before<0: continue
+                        record={"事件":kind,"官方日期":day,"发布时间(北京)":str(published.tz_convert("Asia/Shanghai")),"基准价":round(float(prices[before]),4)}
+                        for hours in (1,4,24):
+                            after=int(close_times.searchsorted(published+pd.Timedelta(hours=hours),side="left"))
+                            record[f"{hours}小时%"]=round((float(prices[after])/float(prices[before])-1)*100,3) if after<len(prices) else None
+                        if any(record[f"{hours}小时%"] is not None for hours in (1,4,24)): results.append(record)
+                if results:
+                    st.dataframe(pd.DataFrame(results),use_container_width=True,hide_index=True)
+                    st.caption(f"匹配到 {len(results)} 条官方事件；仅计算事件窗口价格变化，不代表事件造成变化，也不代表方向预测。")
+                else: st.info("当前历史K线范围与已核对事件无可计算的交集。")
+            except Exception as exc: st.warning(f"官方事件历史匹配失败：{exc}")
+        st.caption("来源：美国劳工统计局2026 CPI与就业报告发布日程、美国联储FOMC会议日历；首批仅覆盖2026年1月至10月已公布事件，不包含预期差和政策结果。")
         st.subheader("📉 事件发布后的历史K线反应")
         st.caption("按新闻源标注的发布时间匹配OKX已收盘1小时K线；仅描述价格变化，不能证明事件导致涨跌。")
         try:
