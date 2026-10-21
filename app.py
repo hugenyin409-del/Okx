@@ -78,9 +78,7 @@ hr{border-color:rgba(130,159,191,.12)!important;margin:1.15rem 0!important}
 .nexus-hero h1{font-size:clamp(26px,3vw,38px)!important;font-weight:750!important}
 .nexus-hero p{max-width:760px;color:#a6bdd4!important;line-height:1.7}
 .nexus-ticker{border-radius:9px!important;background:rgba(15,37,57,.85)!important;border-color:rgba(81,154,210,.18)!important}
-[data-testid="stSidebar"] [role="radiogroup"]{gap:.35rem}
-[data-testid="stSidebar"] [role="radiogroup"] label{padding:9px 11px;border:1px solid rgba(119,160,205,.12);border-radius:9px;background:rgba(21,38,60,.48);transition:background .15s}
-[data-testid="stSidebar"] [role="radiogroup"] label:hover{background:rgba(41,80,118,.46)}
+[data-testid="stSidebar"] [data-testid="stSelectbox"]{margin:4px 0 10px}
 @media(max-width:768px){.block-container{padding:1rem .8rem 2rem!important}.nexus-hero{padding:21px 19px!important}.nexus-hero:after{opacity:.35}[data-testid="stMetric"]{padding:13px!important}[data-testid="stMetricValue"]{font-size:1.18rem!important}}
 @media(prefers-reduced-motion:reduce){div.stButton>button,div.stFormSubmitButton>button{transition:none!important;transform:none!important}}
 
@@ -246,7 +244,7 @@ with st.sidebar:
     st.success("● FREE 会员 · 已登录")
     st.divider()
     st.markdown("##### 🧭 研究导航")
-    research_view=st.radio("工作区",["📊 行情总览","🔬 高级研究","📰 市场新闻","🏦 宏观日历"],label_visibility="collapsed",key="research_navigation")
+    research_view=st.selectbox("选择研究页面",["📊 行情总览","🔬 高级研究","📰 市场新闻","🏦 宏观日历"],key="research_navigation",help="选择后主页面会切换到对应工作区")
     st.caption("高级研究包含历史回测、实验模型与前瞻验证。")
 
     with st.expander("📚 使用指南", expanded=False):
