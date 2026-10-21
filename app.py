@@ -172,6 +172,26 @@ with tab1:
         fig.add_trace(go.Scatter(x=d.ts,y=d.ema50,name="EMA50"))
         fig.update_layout(height=440,xaxis_rangeslider_visible=False,margin=dict(l=5,r=5,t=20,b=5))
         st.plotly_chart(fig,use_container_width=True)
+        st.subheader("🎯 分时段参考区间（1小时 / 4小时 / 1天）")
+        st.caption("以最新成交价为中心，按对应周期ATR估算波动带；不代表未来必然触及，也不是交易指令。")
+        if last is None or age is None or age > 120:
+            st.error("实时成交价缺失或过期，暂停计算分时段参考区间。")
+        else:
+            for horizon, timeframe in (("未来1小时","1H"),("未来4小时","4H"),("未来1天","1D")):
+                try:
+                    hd = indicators(candles(pair,timeframe))
+                    if len(hd)<30: raise ValueError("K线样本不足")
+                    hr = hd.iloc[-1]
+                    width = float(hr.atr)
+                    if not np.isfinite(width) or width<=0: raise ValueError("波动率不可用")
+                    low, high = max(0,last-width), last+width
+                    support = float(hd.low.tail(20).min())
+                    resistance = float(hd.high.tail(20).max())
+                    st.markdown(f"**{horizon}**｜ATR波动参考 **{low:,.2f} ～ {high:,.2f} USDT**")
+                    st.caption(f"{timeframe} 最近20根已收盘K线支撑参考 {support:,.2f}，阻力参考 {resistance:,.2f} USDT；ATR为历史平均波幅，不是预测区间的统计置信界限。")
+                except Exception as exc:
+                    st.warning(f"{horizon} 参考区间暂不可用：{exc}")
+        st.divider()
         st.subheader("🧮 模拟入场与仓位风险")
         st.caption("仅按已收盘 K 线生成方向和 ATR 参考位；入场以最近收盘价为观察参考，不等于当前可成交价格。")
         if direction_text == "观望" or last is None or age is None or age>120:
